@@ -1,0 +1,10 @@
+{
+  "name": "KGN SHOP",
+  "description": "Multi-tenant eCommerce, POS, and Digital Khata SaaS platform with multi-shop capabilities.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

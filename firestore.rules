@@ -1,0 +1,124 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'seikhsarif16@gmail.com'
+      );
+    }
+
+    function isOwner(ownerId) {
+      return isSignedIn() && request.auth.uid == ownerId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      allow create: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin())
+        && incoming().email is string && incoming().email.size() <= 150
+        && incoming().role in ['shop_owner', 'shop_admin', 'customer', 'super_admin', 'admin'];
+      allow update: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phoneNumber', 'activeShopId', 'role']);
+    }
+
+    // Shops
+    match /shops/{shopId} {
+      // Public can read active shop profile for storefront browsing
+      allow get: if true;
+      allow list: if true;
+      allow create: if isSignedIn() 
+        && (incoming().shopOwnerId == request.auth.uid || isSuperAdmin())
+        && incoming().shopName is string && incoming().shopName.size() <= 120
+        && incoming().tier in ['free', 'starter', 'growth', 'pro', 'enterprise'];
+      allow update: if (isOwner(existing().shopOwnerId) && incoming().shopOwnerId == existing().shopOwnerId)
+        || isSuperAdmin()
+        || incoming().diff(existing()).affectedKeys().hasOnly(['tier', 'pendingUpgradeTier', 'pendingUtrNumber', 'isActive', 'updatedAt']);
+      allow delete: if isOwner(existing().shopOwnerId) || isSuperAdmin();
+    }
+
+    // Subscription Plan Approval Requests
+    match /subscription_requests/{requestId} {
+      // Super admin can read and update (approve/reject) all requests
+      // Shop owners can view and submit their own requests
+      allow read: if true;
+      allow create: if isSignedIn() || incoming().shopId is string;
+      allow update: if isSuperAdmin() || isSignedIn();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Products
+    match /products/{productId} {
+      // Public can view products on the storefront
+      allow get: if true;
+      allow list: if true;
+      allow create: if isSignedIn()
+        && incoming().shopOwnerId == request.auth.uid
+        && incoming().name is string && incoming().name.size() <= 150
+        && incoming().sellingPrice is number && incoming().sellingPrice >= 0;
+      allow update: if isOwner(existing().shopOwnerId)
+        && incoming().shopOwnerId == existing().shopOwnerId;
+      allow delete: if isOwner(existing().shopOwnerId) || isSuperAdmin();
+    }
+
+    // Orders
+    match /orders/{orderId} {
+      // Shop owner can list and view all orders for their shop
+      allow read: if (isSignedIn() && (resource.data.shopOwnerId == request.auth.uid || resource.data.customerId == request.auth.uid))
+        || (resource.data.shopOwnerId != null)
+        || isSuperAdmin();
+      // Anyone can create an order (public checkout / guest buyer or shop owner POS)
+      allow create: if incoming().shopOwnerId is string && incoming().shopOwnerId.size() <= 128
+        && incoming().totalAmount is number && incoming().totalAmount >= 0;
+      allow update: if (isSignedIn() && isOwner(existing().shopOwnerId))
+        || (incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'orderStatus', 'updatedAt']))
+        || isSuperAdmin();
+      allow delete: if (isSignedIn() && isOwner(existing().shopOwnerId)) || isSuperAdmin();
+    }
+
+    // Digital Khata Customers (STRICTLY PRIVATE & ISOLATED)
+    match /khata_customers/{customerId} {
+      allow read: if isSignedIn() && (resource.data.shopOwnerId == request.auth.uid || isSuperAdmin());
+      allow create: if isSignedIn() 
+        && incoming().shopOwnerId == request.auth.uid
+        && incoming().name is string && incoming().name.size() <= 120;
+      allow update: if (isSignedIn() && isOwner(existing().shopOwnerId)
+        && incoming().shopOwnerId == existing().shopOwnerId) || isSuperAdmin();
+      allow delete: if (isSignedIn() && isOwner(existing().shopOwnerId)) || isSuperAdmin();
+    }
+
+    // Digital Khata Transactions (STRICTLY PRIVATE & ISOLATED)
+    match /khata_transactions/{txId} {
+      allow read: if isSignedIn() && (resource.data.shopOwnerId == request.auth.uid || isSuperAdmin());
+      allow create: if isSignedIn() 
+        && incoming().shopOwnerId == request.auth.uid
+        && incoming().customerId is string
+        && incoming().amount is number;
+      allow update: if (isSignedIn() && isOwner(existing().shopOwnerId)
+        && incoming().shopOwnerId == existing().shopOwnerId) || isSuperAdmin();
+      allow delete: if (isSignedIn() && isOwner(existing().shopOwnerId)) || isSuperAdmin();
+    }
+  }
+}

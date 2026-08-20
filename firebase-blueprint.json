@@ -1,0 +1,441 @@
+{
+  "entities": {
+    "Shop": {
+      "title": "Shop",
+      "description": "Multi-tenant shop profile owned by a registered shopkeeper",
+      "type": "object",
+      "properties": {
+        "shopOwnerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the shop owner",
+          "maxLength": 128
+        },
+        "shopName": {
+          "type": "string",
+          "description": "Display name of the shop",
+          "maxLength": 120
+        },
+        "slug": {
+          "type": "string",
+          "description": "Unique URL friendly slug for public storefront",
+          "maxLength": 80
+        },
+        "tagline": {
+          "type": "string",
+          "description": "Shop slogan or description",
+          "maxLength": 250
+        },
+        "category": {
+          "type": "string",
+          "description": "Business category (Kirana, Electronics, Garments, etc.)",
+          "maxLength": 60
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number",
+          "maxLength": 20
+        },
+        "whatsappNumber": {
+          "type": "string",
+          "description": "WhatsApp ordering number",
+          "maxLength": 20
+        },
+        "upiId": {
+          "type": "string",
+          "description": "UPI VPA address for instant payment QR code",
+          "maxLength": 80
+        },
+        "address": {
+          "type": "string",
+          "description": "Physical shop location",
+          "maxLength": 300
+        },
+        "city": {
+          "type": "string",
+          "description": "City name",
+          "maxLength": 80
+        },
+        "pincode": {
+          "type": "string",
+          "description": "Postal code",
+          "maxLength": 12
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "URL or base64 data URI of the shop logo",
+          "maxLength": 500000
+        },
+        "bannerUrl": {
+          "type": "string",
+          "description": "Banner background image URL or base64 data URI",
+          "maxLength": 500000
+        },
+        "tier": {
+          "type": "string",
+          "description": "Subscription tier plan (free, growth, pro)",
+          "enum": ["free", "growth", "pro"]
+        },
+        "currency": {
+          "type": "string",
+          "description": "Currency code or symbol",
+          "maxLength": 10
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Whether the shop storefront is open and active"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation ISO timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated ISO timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["shopOwnerId", "shopName", "phone", "tier"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Product catalog item strictly isolated by shopOwnerId",
+      "type": "object",
+      "properties": {
+        "shopOwnerId": {
+          "type": "string",
+          "description": "Shop owner UID isolation key",
+          "maxLength": 128
+        },
+        "shopId": {
+          "type": "string",
+          "description": "Shop reference ID",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Product name",
+          "maxLength": 150
+        },
+        "description": {
+          "type": "string",
+          "description": "Product description",
+          "maxLength": 1000
+        },
+        "category": {
+          "type": "string",
+          "description": "Product category",
+          "maxLength": 80
+        },
+        "mrp": {
+          "type": "number",
+          "description": "Maximum Retail Price"
+        },
+        "sellingPrice": {
+          "type": "number",
+          "description": "Actual discounted selling price"
+        },
+        "stockQuantity": {
+          "type": "number",
+          "description": "Available inventory stock quantity"
+        },
+        "unit": {
+          "type": "string",
+          "description": "Unit of measurement (kg, piece, packet, liter, etc.)",
+          "maxLength": 30
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Product photo URL or data URI",
+          "maxLength": 500000
+        },
+        "barcode": {
+          "type": "string",
+          "description": "Barcode or SKU code for POS scanning",
+          "maxLength": 60
+        },
+        "isFeatured": {
+          "type": "boolean",
+          "description": "Showcase on storefront top section"
+        },
+        "status": {
+          "type": "string",
+          "description": "Stock status",
+          "enum": ["in_stock", "low_stock", "out_of_stock"]
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation ISO timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated ISO timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["shopOwnerId", "name", "sellingPrice", "stockQuantity", "unit"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Storefront or POS customer order strictly isolated by shopOwnerId",
+      "type": "object",
+      "properties": {
+        "shopOwnerId": {
+          "type": "string",
+          "description": "Shop owner UID isolation key",
+          "maxLength": 128
+        },
+        "shopId": {
+          "type": "string",
+          "description": "Shop reference ID",
+          "maxLength": 128
+        },
+        "orderNumber": {
+          "type": "string",
+          "description": "Human readable order invoice number",
+          "maxLength": 40
+        },
+        "customerName": {
+          "type": "string",
+          "description": "Customer full name",
+          "maxLength": 120
+        },
+        "customerPhone": {
+          "type": "string",
+          "description": "Customer mobile contact",
+          "maxLength": 20
+        },
+        "deliveryAddress": {
+          "type": "string",
+          "description": "Delivery address or table / counter info",
+          "maxLength": 400
+        },
+        "deliveryType": {
+          "type": "string",
+          "description": "Order fulfillment mode",
+          "enum": ["delivery", "pickup", "pos"]
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "Subtotal amount before discount"
+        },
+        "discount": {
+          "type": "number",
+          "description": "Discount applied"
+        },
+        "totalAmount": {
+          "type": "number",
+          "description": "Final payable amount"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "description": "Payment mode",
+          "enum": ["cod", "upi", "cash", "khata_credit", "card"]
+        },
+        "paymentStatus": {
+          "type": "string",
+          "description": "Payment status",
+          "enum": ["pending", "paid", "credit", "failed"]
+        },
+        "orderStatus": {
+          "type": "string",
+          "description": "Order processing state",
+          "enum": ["new", "accepted", "preparing", "ready", "completed", "cancelled"]
+        },
+        "notes": {
+          "type": "string",
+          "description": "Special order instructions",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation ISO timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated ISO timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["shopOwnerId", "orderNumber", "totalAmount", "orderStatus", "paymentStatus"]
+    },
+    "KhataCustomer": {
+      "title": "KhataCustomer",
+      "description": "Digital Ledger customer account strictly isolated by shopOwnerId",
+      "type": "object",
+      "properties": {
+        "shopOwnerId": {
+          "type": "string",
+          "description": "Shop owner UID isolation key",
+          "maxLength": 128
+        },
+        "shopId": {
+          "type": "string",
+          "description": "Shop reference ID",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Customer name",
+          "maxLength": 120
+        },
+        "phone": {
+          "type": "string",
+          "description": "Customer phone number for WhatsApp reminders",
+          "maxLength": 20
+        },
+        "address": {
+          "type": "string",
+          "description": "Customer address / locality",
+          "maxLength": 300
+        },
+        "currentBalance": {
+          "type": "number",
+          "description": "Outstanding balance (+ve customer owes, -ve advance)"
+        },
+        "creditLimit": {
+          "type": "number",
+          "description": "Maximum allowed credit limit"
+        },
+        "lastTransactionDate": {
+          "type": "string",
+          "description": "Last transaction timestamp",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation ISO timestamp",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last updated ISO timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["shopOwnerId", "name", "phone", "currentBalance"]
+    },
+    "KhataTransaction": {
+      "title": "KhataTransaction",
+      "description": "Individual credit or debit entry in customer ledger",
+      "type": "object",
+      "properties": {
+        "shopOwnerId": {
+          "type": "string",
+          "description": "Shop owner UID isolation key",
+          "maxLength": 128
+        },
+        "shopId": {
+          "type": "string",
+          "description": "Shop reference ID",
+          "maxLength": 128
+        },
+        "customerId": {
+          "type": "string",
+          "description": "Khata Customer ID",
+          "maxLength": 128
+        },
+        "type": {
+          "type": "string",
+          "description": "Transaction entry type",
+          "enum": ["credit_given", "payment_received"]
+        },
+        "amount": {
+          "type": "number",
+          "description": "Transaction amount"
+        },
+        "balanceAfter": {
+          "type": "number",
+          "description": "Customer balance after transaction"
+        },
+        "billNumber": {
+          "type": "string",
+          "description": "Associated invoice or bill number",
+          "maxLength": 50
+        },
+        "notes": {
+          "type": "string",
+          "description": "Notes or item details",
+          "maxLength": 300
+        },
+        "date": {
+          "type": "string",
+          "description": "Transaction date",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation ISO timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["shopOwnerId", "customerId", "type", "amount", "balanceAfter"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with role definition",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "User email address",
+          "maxLength": 150
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User display name",
+          "maxLength": 120
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "User contact number",
+          "maxLength": 20
+        },
+        "role": {
+          "type": "string",
+          "description": "System role",
+          "enum": ["shop_owner", "customer", "admin"]
+        },
+        "activeShopId": {
+          "type": "string",
+          "description": "Primary active shop ID for the user",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation ISO timestamp",
+          "maxLength": 64
+        }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/shops/{shopId}": {
+      "schema": "Shop",
+      "description": "Multi-tenant shop profile documents"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Product catalog isolated by shopOwnerId"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Orders collection isolated by shopOwnerId"
+    },
+    "/khata_customers/{customerId}": {
+      "schema": "KhataCustomer",
+      "description": "Digital Khata customer ledger profiles isolated by shopOwnerId"
+    },
+    "/khata_transactions/{txId}": {
+      "schema": "KhataTransaction",
+      "description": "Digital Khata transaction entries isolated by shopOwnerId"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile and role metadata"
+    }
+  }
+}
