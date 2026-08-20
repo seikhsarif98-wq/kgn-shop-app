@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useShop } from '../../context/ShopContext';
 import { 
@@ -28,10 +28,14 @@ import {
   ChevronRight,
   TrendingUp,
   CreditCard,
-  MessageSquare
+  MessageSquare,
+  KeyRound,
+  Shield,
+  Save
 } from 'lucide-react';
 import { SubscriptionTier, SubscriptionRequest, Shop } from '../../types';
 import { TIER_PLANS, getTierPlan } from '../../lib/plans';
+import { SuperAdminLoginScreen } from './SuperAdminLoginScreen';
 
 interface SuperAdminPortalProps {
   onNavigateToShopAdmin?: (shopId: string) => void;
@@ -62,48 +66,49 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
   const [selectedReceiptImage, setSelectedReceiptImage] = useState<string | null>(null);
 
-  // 1. SECURITY GUARD: Block non-super_admin users
-  if (!isSuperAdmin) {
-    return (
-      <div id="super-admin-access-denied" className="max-w-xl mx-auto my-12 p-8 bg-white border border-rose-200 rounded-3xl shadow-xl text-center space-y-5 animate-in fade-in">
-        <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
-          <Lock className="w-8 h-8" />
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-xl font-bold text-slate-900">
-            Access Restricted: Super Admin Only
-          </h2>
-          <p className="text-xs text-slate-600 leading-relaxed">
-            The <strong>/super-admin</strong> portal is strictly protected for platform super administrators to manage shopkeeper payments, verify UPI UTR references, and authorize plan upgrades.
-          </p>
-          <div className="inline-block px-3 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold">
-            Current Session Role: <span className="text-rose-600 font-bold uppercase">{role}</span>
-          </div>
-        </div>
+  // Super Admin PIN / Password Security Unlock State
+  const [isSuperAdminUnlocked, setIsSuperAdminUnlocked] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      return sessionStorage.getItem('kgn_superadmin_unlocked') === 'true';
+    }
+    return false;
+  });
 
-        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row gap-2 justify-center">
-          <button
-            id="switch-to-super-admin-demo-btn"
-            onClick={() => switchDemoRole('super_admin')}
-            className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-xs"
-          >
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Switch to Super Admin (Demo Mode)</span>
-          </button>
-          {onNavigateToStorefront && (
-            <button
-              onClick={onNavigateToStorefront}
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
-            >
-              Return to Storefront
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // Master PIN customization state
+  const [superAdminPinInput, setSuperAdminPinInput] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('kgn_super_admin_custom_pin') || '9999';
+    }
+    return '9999';
+  });
+  const [customUpiInput, setCustomUpiInput] = useState<string>('seikhsarif16@oksbi');
 
-  // 2. Computed Super Admin Stats
+  const handleUnlock = () => {
+    setIsSuperAdminUnlocked(true);
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.setItem('kgn_superadmin_unlocked', 'true');
+    }
+    if (role !== 'super_admin') {
+      switchDemoRole('super_admin');
+    }
+  };
+
+  const handleLockConsole = () => {
+    setIsSuperAdminUnlocked(false);
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.removeItem('kgn_superadmin_unlocked');
+    }
+  };
+
+  const handleSaveSecuritySettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanPin = superAdminPinInput.trim() || '9999';
+    localStorage.setItem('kgn_super_admin_custom_pin', cleanPin);
+    setActionSuccessMsg(`🔒 Super Admin Master PIN updated to "${cleanPin}".`);
+    setTimeout(() => setActionSuccessMsg(null), 4000);
+  };
+
+  // 2. Computed Super Admin Stats (Must be declared before any early return to satisfy Rules of Hooks)
   const pendingRequests = subscriptionRequests.filter(r => r.status === 'pending');
   const approvedRequests = subscriptionRequests.filter(r => r.status === 'approved');
   const rejectedRequests = subscriptionRequests.filter(r => r.status === 'rejected');
@@ -157,9 +162,53 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
     return matchesSearch && matchesTier;
   });
 
+  // 3. SECURITY PIN / PASSWORD GATE:
+  // Must unlock with dedicated Super Admin PIN/Password before viewing platform controls or merchant payments
+  if (!isSuperAdminUnlocked) {
+    return (
+      <SuperAdminLoginScreen
+        onUnlock={handleUnlock}
+        onReturnToStorefront={onNavigateToStorefront}
+      />
+    );
+  }
+
   return (
     <div id="super-admin-portal-view" className="space-y-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 animate-in fade-in">
       
+      {/* Top Security & Admin Terminal Bar */}
+      <div className="bg-white rounded-2xl border border-purple-200 shadow-2xs p-3.5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-purple-950 text-purple-300 flex items-center justify-center font-bold text-sm shadow-xs">
+            <ShieldCheck className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900">Network Master Super Admin</h2>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
+                <span>Console Authenticated</span>
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-mono">
+              Root PIN: <strong className="text-purple-900 font-bold">{superAdminPinInput}</strong> • Operator: seikhsarif16@gmail.com
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            id="super-admin-lock-terminal-btn"
+            onClick={handleLockConsole}
+            className="px-3.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-2xs"
+            title="Lock the Super Admin console immediately"
+          >
+            <Lock className="w-3.5 h-3.5 text-rose-600" />
+            <span>Lock Super Admin</span>
+          </button>
+        </div>
+      </div>
+
       {/* Top Banner & Super Admin Identity */}
       <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 border border-slate-800 shadow-xl relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -293,6 +342,19 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
           >
             <Store className="w-3.5 h-3.5" />
             <span>Manage All Shops ({shops.length})</span>
+          </button>
+
+          <button
+            id="tab-super-admin-settings-btn"
+            onClick={() => setActiveTab('settings')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+              activeTab === 'settings'
+                ? 'bg-purple-950 text-white shadow-2xs'
+                : 'bg-white text-purple-800 hover:bg-purple-50 border border-purple-200'
+            }`}
+          >
+            <KeyRound className="w-3.5 h-3.5 text-purple-400" />
+            <span>Master PIN & Platform Security</span>
           </button>
         </div>
 
@@ -653,6 +715,101 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
             </div>
           </div>
 
+        </div>
+      )}
+
+      {/* TAB 4: MASTER SECURITY & PIN SETTINGS */}
+      {activeTab === 'settings' && (
+        <div className="space-y-6 max-w-4xl">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-2xs space-y-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="space-y-1">
+                <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-purple-600" />
+                  <span>Super Admin Master Access PIN & Password</span>
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Protect network-level operations, shopkeeper plan approvals, and global tenant suspensions from store owners and public visitors.
+                </p>
+              </div>
+
+              <span className="text-[11px] font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-full border border-purple-200">
+                Root Security Gate
+              </span>
+            </div>
+
+            <form onSubmit={handleSaveSecuritySettings} className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Master Super Admin PIN
+                  </label>
+                  <div className="relative">
+                    <KeyRound className="w-4 h-4 text-purple-400 absolute left-3 top-3" />
+                    <input
+                      type="text"
+                      maxLength={12}
+                      value={superAdminPinInput}
+                      onChange={(e) => setSuperAdminPinInput(e.target.value)}
+                      placeholder="9999"
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-purple-900 font-mono font-bold text-slate-900 text-sm tracking-wider"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Default master PIN is <strong className="text-slate-700">9999</strong>. You can change it to any custom numeric PIN or security phrase.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Platform Master UPI Receiving ID
+                  </label>
+                  <div className="relative">
+                    <IndianRupee className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type="text"
+                      value={customUpiInput}
+                      onChange={(e) => setCustomUpiInput(e.target.value)}
+                      placeholder="seikhsarif16@oksbi"
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-slate-900 font-mono font-bold text-slate-900 text-sm"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Receives ₹199 Starter & ₹499 Pro merchant subscription payments.
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-4 bg-purple-50/70 border border-purple-200/80 rounded-2xl flex items-start gap-3.5">
+                <ShieldCheck className="w-5 h-5 text-purple-700 shrink-0 mt-0.5" />
+                <div className="text-xs text-purple-950 leading-relaxed">
+                  <p className="font-bold">Role-Based Access Control (RBAC):</p>
+                  <p className="text-purple-800 text-[11px] mt-0.5">
+                    Regular shop owners and storefront customers are locked out of the <code className="font-mono font-bold bg-white px-1.5 py-0.5 rounded border border-purple-200">/super-admin</code> route unless they enter this Super Admin PIN or Master Password.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={handleLockConsole}
+                  className="px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition flex items-center gap-2"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>Lock Super Admin Console Now</span>
+                </button>
+
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 bg-purple-950 hover:bg-purple-900 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4 text-purple-300" />
+                  <span>Save Security Settings</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

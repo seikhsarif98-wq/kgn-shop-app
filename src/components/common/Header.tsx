@@ -146,7 +146,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           </div>
 
-          {/* Center Switcher: Clean Minimalist Tabs */}
+          {/* Center Switcher: Clean Minimalist Public Navigation */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
               id="nav-storefront-tab-btn"
@@ -175,47 +175,6 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden sm:inline">All Shops</span>
               <span className="sm:hidden">Directory</span>
             </button>
-
-            <button
-              id="nav-admin-portal-tab-btn"
-              onClick={() => {
-                if (!isMerchant && !isSuperAdmin) {
-                  switchDemoRole('shop_owner', activeShop.shopOwnerId);
-                }
-                onModeChange('admin');
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                currentMode === 'admin'
-                  ? 'bg-slate-900 text-white shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Admin Portal</span>
-              <span className="sm:hidden">Admin</span>
-            </button>
-
-            {/* Super Admin Access Tab */}
-            {(isSuperAdmin || role === 'super_admin' || role === 'admin') && (
-              <button
-                id="nav-super-admin-tab-btn"
-                onClick={() => onModeChange('super_admin')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  currentMode === 'super_admin'
-                    ? 'bg-purple-900 text-white shadow-2xs'
-                    : 'text-purple-700 hover:bg-purple-50'
-                }`}
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Super Admin</span>
-                <span className="sm:hidden">Super</span>
-                {pendingApprovalsCount > 0 && (
-                  <span className="bg-amber-400 text-slate-900 text-[9px] font-extrabold px-1.5 py-0.2 rounded-full">
-                    {pendingApprovalsCount}
-                  </span>
-                )}
-              </button>
-            )}
           </div>
 
           {/* Right Actions: Cart & Profile */}
@@ -280,29 +239,6 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
 
                   <div className="py-1 space-y-0.5">
-                    {/* Direct Super Admin Navigation */}
-                    <button
-                      id="menu-open-super-admin-btn"
-                      onClick={() => {
-                        setShowUserDropdown(false);
-                        if (!isSuperAdmin) {
-                          switchDemoRole('super_admin');
-                        }
-                        onModeChange('super_admin');
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs font-semibold text-purple-700 hover:bg-purple-50 rounded-lg flex items-center justify-between transition"
-                    >
-                      <div className="flex items-center gap-2">
-                        <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-                        <span>Super Admin Panel</span>
-                      </div>
-                      {pendingApprovalsCount > 0 && (
-                        <span className="bg-amber-400 text-slate-900 text-[9px] font-extrabold px-1.5 py-0.2 rounded-full">
-                          {pendingApprovalsCount}
-                        </span>
-                      )}
-                    </button>
-
                     <button
                       id="menu-open-auth-btn"
                       onClick={() => {

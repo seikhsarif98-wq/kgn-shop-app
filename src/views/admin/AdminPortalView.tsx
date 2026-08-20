@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useShop } from '../../context/ShopContext';
 import { useAuth } from '../../context/AuthContext';
 import { 
@@ -16,8 +16,12 @@ import {
   Sparkles,
   ShieldCheck,
   Building2,
-  Lock
+  Lock,
+  LogOut,
+  KeyRound,
+  Shield
 } from 'lucide-react';
+import { AdminLoginScreen } from './AdminLoginScreen';
 import { DashboardOverview } from './DashboardOverview';
 import { ProductManagement } from './ProductManagement';
 import { PosTerminal } from './PosTerminal';
@@ -41,8 +45,38 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [isNewShopModalOpen, setIsNewShopModalOpen] = useState(false);
 
-  // Role verification: allow shop_owner or admin, or prompt demo switch
-  const isAuthorized = role === 'shop_owner' || role === 'admin';
+  // Secure Password/PIN Lock Screen State
+  const [isPinUnlocked, setIsPinUnlocked] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      return sessionStorage.getItem(`kgn_admin_unlocked_${activeShop.id}`) === 'true';
+    }
+    return false;
+  });
+
+  // Re-verify lock when active shop switches
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const isShopUnlocked = sessionStorage.getItem(`kgn_admin_unlocked_${activeShop.id}`) === 'true';
+      setIsPinUnlocked(isShopUnlocked);
+    }
+  }, [activeShop.id]);
+
+  const handleUnlock = () => {
+    setIsPinUnlocked(true);
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.setItem(`kgn_admin_unlocked_${activeShop.id}`, 'true');
+    }
+  };
+
+  const handleLockTerminal = () => {
+    setIsPinUnlocked(false);
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      sessionStorage.removeItem(`kgn_admin_unlocked_${activeShop.id}`);
+    }
+  };
+
+  // 1. Role verification: allow shop_owner or admin, or prompt demo switch
+  const isAuthorized = role === 'shop_owner' || role === 'admin' || role === 'super_admin';
 
   if (!isAuthorized) {
     return (
@@ -61,7 +95,9 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
 
           <div className="pt-2 flex flex-col gap-2">
             <button
-              onClick={() => switchDemoRole('shop_owner', activeShop.shopOwnerId)}
+              onClick={() => {
+                switchDemoRole('shop_owner', activeShop.shopOwnerId);
+              }}
               className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2"
             >
               <Sparkles className="w-3.5 h-3.5 text-blue-400" />
@@ -77,6 +113,17 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
           </div>
         </div>
       </div>
+    );
+  }
+
+  // 2. PASSWORD / PIN LOCK SCREEN GUARD
+  // All products, orders, POS terminal and controls remain strictly hidden until correct PIN/password is entered.
+  if (!isPinUnlocked) {
+    return (
+      <AdminLoginScreen 
+        onUnlock={handleUnlock}
+        onOpenAuth={onOpenAuth}
+      />
     );
   }
 
@@ -100,8 +147,41 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
   ];
 
   return (
-    <div id="admin-portal-root" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div id="admin-portal-root" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-150">
       
+      {/* Top Security & Admin Terminal Bar */}
+      <div className="mb-6 bg-white rounded-2xl border border-slate-200 shadow-2xs p-3.5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-sm">
+            {activeShop.shopName.charAt(0)}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-slate-900">{activeShop.shopName}</h2>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                <span>Admin Unlocked</span>
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-mono">
+              Store PIN: <strong className="text-slate-700">{activeShop.adminPin || '1234'}</strong> • Tenant Partition Active
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            id="admin-lock-terminal-btn"
+            onClick={handleLockTerminal}
+            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-2xs"
+            title="Lock the admin screen immediately"
+          >
+            <Lock className="w-3.5 h-3.5 text-rose-600" />
+            <span>Lock Admin Terminal</span>
+          </button>
+        </div>
+      </div>
+
       <div className="flex flex-col md:flex-row gap-8 items-start">
         
         {/* Clean Minimal Sidebar */}
@@ -161,7 +241,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
             </button>
           </div>
 
-          {/* Tenant Session Active Card */}
+          {/* Tenant Session Active Card & Quick Lock */}
           <div className="pt-4 border-t border-slate-100 space-y-2">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0">
@@ -173,10 +253,20 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
               </div>
             </div>
             
-            <div className="p-2 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-bold border border-blue-100 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-              <span>Tenant Partition Isolated</span>
+            <div className="p-2 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-bold border border-blue-100 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                <span>Tenant Partition Isolated</span>
+              </div>
             </div>
+
+            <button
+              onClick={handleLockTerminal}
+              className="w-full py-1.5 px-2.5 text-[11px] font-semibold text-slate-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition flex items-center justify-center gap-1.5"
+            >
+              <Lock className="w-3 h-3 text-slate-400" />
+              <span>Lock Terminal</span>
+            </button>
           </div>
 
         </div>

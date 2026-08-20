@@ -16,7 +16,9 @@ import {
   Trash2,
   ExternalLink,
   Cloud,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  KeyRound
 } from 'lucide-react';
 import { MediaCaptureModal } from '../../components/common/MediaCaptureModal';
 
@@ -26,6 +28,7 @@ export const ShopSettings: React.FC = () => {
   const [shopName, setShopName] = useState(activeShop.shopName);
   const [tagline, setTagline] = useState(activeShop.tagline || '');
   const [category, setCategory] = useState(activeShop.category);
+  const [adminPin, setAdminPin] = useState(activeShop.adminPin || '1234');
   const [phone, setPhone] = useState(activeShop.phone);
   const [whatsappNumber, setWhatsappNumber] = useState(activeShop.whatsappNumber || '');
   const [address, setAddress] = useState(activeShop.address || '');
@@ -46,6 +49,7 @@ export const ShopSettings: React.FC = () => {
       shopName,
       tagline,
       category,
+      adminPin: adminPin.trim() || '1234',
       phone,
       whatsappNumber,
       address,
@@ -345,6 +349,55 @@ export const ShopSettings: React.FC = () => {
               )}
             </div>
 
+          </div>
+        </div>
+
+        {/* 4. Admin Security & PIN Configuration */}
+        <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xs space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+              <Lock className="w-4 h-4 text-blue-600" />
+              <span>Admin Security & Terminal PIN Lock</span>
+            </h3>
+            <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 flex items-center gap-1">
+              <KeyRound className="w-3 h-3 text-blue-600" /> POS & Inventory Protection
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-500">
+            Set a custom 4-digit numeric PIN or password for your shopkeeper dashboard. This PIN is required to unlock product management, inventory controls, POS cashier terminal, and the Khata ledger when accessing <strong className="text-slate-700">/admin</strong>.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Admin Console PIN / Password
+              </label>
+              <div className="relative">
+                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  maxLength={12}
+                  value={adminPin}
+                  onChange={(e) => setAdminPin(e.target.value)}
+                  placeholder="e.g. 1234"
+                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-slate-900 font-mono font-bold text-slate-900 text-sm tracking-wider"
+                />
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">
+                Default demo master PIN is <strong className="text-slate-600">1234</strong>. You can change it to any custom PIN for your store.
+              </p>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div className="text-[11px] text-slate-600">
+                <span className="font-bold text-slate-900">One-Click Lock: </span>
+                Merchants can lock the terminal anytime using the "Lock Admin Terminal" button when away from the billing counter.
+              </div>
+            </div>
           </div>
         </div>
 

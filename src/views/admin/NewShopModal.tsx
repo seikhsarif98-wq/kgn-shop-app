@@ -36,6 +36,7 @@ export const NewShopModal: React.FC<NewShopModalProps> = ({ isOpen, onClose }) =
   const [city, setCity] = useState('Mumbai');
   const [address, setAddress] = useState('');
   const [pincode, setPincode] = useState('400001');
+  const [adminPin, setAdminPin] = useState('1234');
   const [upiId, setUpiId] = useState('');
   const [tier, setTier] = useState<SubscriptionTier>('starter');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -67,6 +68,7 @@ export const NewShopModal: React.FC<NewShopModalProps> = ({ isOpen, onClose }) =
         slug,
         tagline: tagline || `${category} store with instant delivery`,
         category,
+        adminPin: adminPin.trim() || '1234',
         phone,
         whatsappNumber: whatsappNumber || phone,
         city: city || 'Mumbai',
@@ -270,6 +272,20 @@ export const NewShopModal: React.FC<NewShopModalProps> = ({ isOpen, onClose }) =
                   />
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">Used to generate dynamic QR codes for GPay, PhonePe, Paytm, and BHIM.</p>
+              </div>
+
+              {/* Admin Security PIN */}
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Admin Dashboard PIN (For /admin security)</label>
+                <input
+                  type="text"
+                  maxLength={8}
+                  value={adminPin}
+                  onChange={(e) => setAdminPin(e.target.value)}
+                  placeholder="1234"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-slate-900 font-mono font-bold text-slate-900"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">4-digit PIN to lock and protect inventory and orders from unauthorized access.</p>
               </div>
 
               {/* Plan Selection */}

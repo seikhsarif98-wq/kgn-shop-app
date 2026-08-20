@@ -50,6 +50,7 @@ export interface Shop {
   logoUrl?: string;
   bannerUrl?: string;
   tier: SubscriptionTier;
+  adminPin?: string;
   pendingUpgradeTier?: SubscriptionTier | null;
   pendingUtrNumber?: string | null;
   currency: string;
