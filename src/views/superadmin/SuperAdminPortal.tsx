@@ -31,7 +31,9 @@ import {
   MessageSquare,
   KeyRound,
   Shield,
-  Save
+  Save,
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 import { SubscriptionTier, SubscriptionRequest, Shop } from '../../types';
 import { TIER_PLANS, getTierPlan } from '../../lib/plans';
@@ -49,11 +51,15 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
   const { isSuperAdmin, role, profile, switchDemoRole } = useAuth();
   const { 
     shops, 
+    activeShop,
     subscriptionRequests, 
     approvePlanRequest, 
     rejectPlanRequest, 
     toggleShopStatus, 
     superAdminSetTier,
+    deleteShop,
+    resetDemoShops,
+    restoreDemoShops,
     setActiveShopId
   } = useShop();
 
@@ -65,6 +71,34 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
   const [rejectionReason, setRejectionReason] = useState('Payment reference / UTR not found in bank statement.');
   const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
   const [selectedReceiptImage, setSelectedReceiptImage] = useState<string | null>(null);
+
+  const handleResetDemoShops = async () => {
+    if (window.confirm('Are you sure you want to clear extra demo shops and keep ONLY 1 active main shop?')) {
+      await resetDemoShops();
+      setActionSuccessMsg('Successfully cleared extra demo shops! Kept 1 main active shop.');
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    }
+  };
+
+  const handleRestoreDemoShops = async () => {
+    if (window.confirm('Restore all default sample shops across the platform?')) {
+      await restoreDemoShops();
+      setActionSuccessMsg('Default demo shops restored successfully.');
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    }
+  };
+
+  const handleDeleteShop = async (shopId: string, shopName: string) => {
+    if (shops.length <= 1) {
+      alert('Cannot delete the only remaining shop.');
+      return;
+    }
+    if (window.confirm(`Are you sure you want to permanently delete shop "${shopName}"?`)) {
+      await deleteShop(shopId);
+      setActionSuccessMsg(`Shop "${shopName}" deleted successfully.`);
+      setTimeout(() => setActionSuccessMsg(null), 4000);
+    }
+  };
 
   // Super Admin PIN / Password Security Unlock State
   const [isSuperAdminUnlocked, setIsSuperAdminUnlocked] = useState<boolean>(() => {
@@ -611,6 +645,44 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
       {activeTab === 'shops' && (
         <div className="space-y-4">
           
+          {/* Quick Demo Store Cleanup Banner */}
+          <div className="bg-slate-900 text-white rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-slate-800 shadow-sm">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-400" />
+                <h4 className="font-bold text-xs sm:text-sm text-white">Registered Multi-Store Network ({shops.length} Shops)</h4>
+                <span className="text-[10px] font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full">
+                  Active: {activeShop?.shopName || 'Main'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                Quickly clear extra demo test shops to leave 1 active shop, or prune individual shops below.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                id="superadmin-clear-extra-demo-shops-btn"
+                onClick={handleResetDemoShops}
+                className="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-xs"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Clear Extra Demo Shops (Keep 1 Main)</span>
+              </button>
+
+              <button
+                type="button"
+                id="superadmin-restore-demo-shops-btn"
+                onClick={handleRestoreDemoShops}
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700 transition flex items-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-blue-400" />
+                <span>Restore Sample Network</span>
+              </button>
+            </div>
+          </div>
+
           {/* Filter Bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-white rounded-2xl border border-slate-200">
             <div className="relative w-full sm:w-80">
@@ -719,6 +791,16 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
                             <span>Open Admin</span>
                           </button>
                         )}
+
+                        <button
+                          onClick={() => handleDeleteShop(shop.id, shop.shopName)}
+                          disabled={shops.length <= 1}
+                          className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 disabled:opacity-40 text-rose-700 rounded-lg text-[11px] font-semibold transition inline-flex items-center gap-1"
+                          title="Delete Shop"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete</span>
+                        </button>
                       </td>
 
                     </tr>
@@ -823,6 +905,46 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
               </div>
             </form>
           </div>
+
+          {/* Super Admin Fleet Pruning & Demo Data Reset Card */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-2xs space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-blue-600" />
+                <h3 className="font-extrabold text-slate-900 text-sm">Demo Data & Store Network Pruning</h3>
+              </div>
+              <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                {shops.length} Total Stores Registered
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              If you have created multiple test shops during testing, you can clean up the fleet and retain only 1 main active shop, or restore the default sample test stores for demo purposes.
+            </p>
+
+            <div className="flex flex-wrap items-center gap-3 pt-2">
+              <button
+                type="button"
+                id="superadmin-settings-clear-demo-btn"
+                onClick={handleResetDemoShops}
+                className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-2 shadow-xs"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Reset / Clear Extra Demo Shops (Keep 1 Main)</span>
+              </button>
+
+              <button
+                type="button"
+                id="superadmin-settings-restore-demo-btn"
+                onClick={handleRestoreDemoShops}
+                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl border border-slate-200 transition flex items-center gap-2"
+              >
+                <RotateCcw className="w-4 h-4 text-blue-600" />
+                <span>Restore Sample Multi-Store Network</span>
+              </button>
+            </div>
+          </div>
+
         </div>
       )}
 

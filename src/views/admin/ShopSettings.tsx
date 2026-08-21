@@ -18,12 +18,22 @@ import {
   Cloud,
   CheckCircle2,
   Lock,
-  KeyRound
+  KeyRound,
+  Globe,
+  Copy,
+  AlertTriangle,
+  RotateCcw,
+  Layers
 } from 'lucide-react';
 import { MediaCaptureModal } from '../../components/common/MediaCaptureModal';
+import { getShareableStoreUrl, slugifyShopName } from '../../lib/slugs';
 
-export const ShopSettings: React.FC = () => {
-  const { activeShop, updateShopSettings } = useShop();
+interface ShopSettingsProps {
+  onViewStorefront?: (slug?: string) => void;
+}
+
+export const ShopSettings: React.FC<ShopSettingsProps> = ({ onViewStorefront }) => {
+  const { activeShop, shops, updateShopSettings, deleteShop, resetDemoShops, restoreDemoShops } = useShop();
 
   const [shopName, setShopName] = useState(activeShop.shopName);
   const [tagline, setTagline] = useState(activeShop.tagline || '');
@@ -42,6 +52,47 @@ export const ShopSettings: React.FC = () => {
   // Media Capture Modal State
   const [mediaTarget, setMediaTarget] = useState<'logo' | 'banner' | 'qr' | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+
+  const activeStoreSlug = slugifyShopName(activeShop.slug || activeShop.shopName);
+  const shareableStoreUrl = getShareableStoreUrl(activeStoreSlug);
+
+  const handleCopyLink = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareableStoreUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
+  };
+
+  const handleResetDemoShops = async () => {
+    if (window.confirm(`Are you sure you want to delete all other demo/test shops and keep ONLY "${activeShop.shopName}" as your 1 active main shop?`)) {
+      await resetDemoShops(activeShop.id);
+      setActionFeedback(`Extra test shops cleared! Kept 1 active main shop: ${activeShop.shopName}`);
+      setTimeout(() => setActionFeedback(null), 4000);
+    }
+  };
+
+  const handleDeleteThisShop = async () => {
+    if (shops.length <= 1) {
+      alert('You cannot delete your only active shop.');
+      return;
+    }
+    if (window.confirm(`Are you sure you want to permanently delete "${activeShop.shopName}"?`)) {
+      await deleteShop(activeShop.id);
+      setActionFeedback(`Store "${activeShop.shopName}" deleted successfully.`);
+      setTimeout(() => setActionFeedback(null), 4000);
+    }
+  };
+
+  const handleRestoreDemoShops = async () => {
+    if (window.confirm('Restore all default demo stores and product catalog?')) {
+      await restoreDemoShops();
+      setActionFeedback('Default demo shops restored successfully.');
+      setTimeout(() => setActionFeedback(null), 4000);
+    }
+  };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +134,78 @@ export const ShopSettings: React.FC = () => {
             Changes Saved Live
           </span>
         )}
+      </div>
+
+      {/* Feedback Alert */}
+      {actionFeedback && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-2xl text-xs font-bold flex items-center justify-between animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            <span>{actionFeedback}</span>
+          </div>
+          <button onClick={() => setActionFeedback(null)} className="text-emerald-700 hover:text-emerald-900 text-xs">Dismiss</button>
+        </div>
+      )}
+
+      {/* Shareable Store URL Card */}
+      <div className="bg-slate-900 text-white rounded-3xl p-6 border border-slate-800 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
+              <Globe className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-white text-sm">Online Storefront Shareable URL</h3>
+              <p className="text-xs text-slate-400">
+                Direct public store link generated from this shop's exact name slug: <strong className="font-mono text-emerald-400">/store/{activeStoreSlug}</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {onViewStorefront && (
+              <button
+                type="button"
+                id="settings-view-storefront-btn"
+                onClick={() => onViewStorefront('/store/' + activeStoreSlug)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-slate-700 cursor-pointer"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                <span>View Public Storefront</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              id="settings-copy-store-url-btn"
+              onClick={handleCopyLink}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                copiedLink ? 'bg-emerald-500 text-white' : 'bg-blue-600 hover:bg-blue-500 text-white'
+              }`}
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  <span>Copied!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy Store Link</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="bg-slate-800/90 border border-slate-700/80 rounded-xl px-3.5 py-2.5 flex items-center justify-between gap-3">
+          <span className="font-mono text-xs text-emerald-400 truncate font-semibold">
+            {shareableStoreUrl}
+          </span>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 uppercase tracking-wider shrink-0">
+            Active Store
+          </span>
+        </div>
       </div>
 
       {/* 2. Settings Form */}
@@ -414,6 +537,88 @@ export const ShopSettings: React.FC = () => {
         </div>
 
       </form>
+
+      {/* 5. Danger Zone & Demo Stores Fleet Management */}
+      <div className="bg-white rounded-3xl p-6 border border-rose-200/80 shadow-2xs space-y-4">
+        <div className="flex items-center justify-between border-b border-rose-100 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+              <AlertTriangle className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-sm">Store Network & Demo Shops Management</h3>
+              <p className="text-xs text-slate-500">
+                Manage your registered shop profile or clear sample test stores from the multi-shop switcher.
+              </p>
+            </div>
+          </div>
+          <span className="text-[11px] font-bold text-slate-700 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+            {shops.length} Registered {shops.length === 1 ? 'Shop' : 'Shops'}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+          {/* Option A: Clear Extra Demo Shops and Keep Only Active 1 */}
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col justify-between space-y-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-600" />
+                <h4 className="font-bold text-xs text-slate-900">Clear Extra Demo Shops</h4>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Delete all other unused demo/test stores from the switcher and keep ONLY <strong className="text-slate-800">"{activeShop.shopName}"</strong> as your 1 active main shop.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              id="reset-clear-extra-demo-shops-btn"
+              onClick={handleResetDemoShops}
+              className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-2xs"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>Reset / Clear Extra Demo Shops (Keep 1 Main)</span>
+            </button>
+          </div>
+
+          {/* Option B: Delete Currently Active Shop or Restore Defaults */}
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col justify-between space-y-3">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Trash2 className="w-4 h-4 text-rose-600" />
+                <h4 className="font-bold text-xs text-slate-900">Delete Current Store ({activeShop.shopName})</h4>
+              </div>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Permanently delete this specific shop. {shops.length <= 1 ? '(Disabled: At least 1 shop is required).' : 'The switcher will move to the next store.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                id="delete-current-shop-btn"
+                disabled={shops.length <= 1}
+                onClick={handleDeleteThisShop}
+                className="flex-1 py-2.5 px-3 bg-rose-50 hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Store</span>
+              </button>
+
+              <button
+                type="button"
+                id="restore-demo-shops-btn"
+                onClick={handleRestoreDemoShops}
+                className="py-2.5 px-3 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-xl transition flex items-center gap-1"
+                title="Restore all default sample shops"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Restore Sample Shops</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Media Capture Modal */}
       {mediaTarget && (

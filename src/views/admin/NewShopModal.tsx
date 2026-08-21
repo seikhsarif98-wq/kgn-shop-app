@@ -28,9 +28,10 @@ import { generateUniqueShopSlug, getShareableStoreUrl, getWhatsAppShareUrl } fro
 interface NewShopModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onNavigateToStorefront?: (slug?: string) => void;
 }
 
-export const NewShopModal: React.FC<NewShopModalProps> = ({ isOpen, onClose }) => {
+export const NewShopModal: React.FC<NewShopModalProps> = ({ isOpen, onClose, onNavigateToStorefront }) => {
   const { createNewShop, shops } = useShop();
   const { user, activeShopOwnerId } = useAuth();
 
@@ -256,18 +257,20 @@ export const NewShopModal: React.FC<NewShopModalProps> = ({ isOpen, onClose }) =
                   <span>Open Dashboard</span>
                 </button>
 
-                <a
+                <button
+                  type="button"
                   id="preview-store-external-btn"
-                  href={`/store/${createdShop.slug}`}
-                  onClick={(e) => {
-                    e.preventDefault();
+                  onClick={() => {
                     onClose();
+                    if (onNavigateToStorefront) {
+                      onNavigateToStorefront(createdShop.slug);
+                    }
                   }}
                   className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>View Storefront</span>
-                </a>
+                </button>
               </div>
             </div>
           </div>

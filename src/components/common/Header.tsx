@@ -55,7 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Left Brand: Store Identity */}
           <div className="flex items-center gap-3">
             <div 
-              onClick={() => onModeChange(isMerchantOrAdmin ? 'admin' : 'storefront')}
+              onClick={() => onModeChange(isMerchantOrAdmin ? 'admin' : 'storefront', activeShop.slug || activeShop.shopName)}
               className="cursor-pointer flex items-center gap-2.5 group"
             >
               <div className="w-8 h-8 bg-slate-900 rounded-xl flex items-center justify-center shadow-xs">
@@ -105,10 +105,15 @@ export const Header: React.FC<HeaderProps> = ({
                       {shops.map((s) => (
                         <button
                           key={s.id}
+                          id={`shop-switch-option-${s.id}`}
                           onClick={() => {
                             setActiveShopId(s.id);
                             setShowShopDropdown(false);
-                            onModeChange('admin');
+                            if (currentMode === 'storefront') {
+                              onModeChange('storefront', s.slug || s.shopName);
+                            } else {
+                              onModeChange('admin');
+                            }
                           }}
                           className={`w-full text-left p-2.5 rounded-xl text-xs flex items-center justify-between transition ${
                             s.id === activeShop.id
@@ -181,7 +186,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               <button
                 id="nav-storefront-tab-btn"
-                onClick={() => onModeChange('storefront', activeShop.slug)}
+                onClick={() => onModeChange('storefront', activeShop.slug || activeShop.shopName)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                   currentMode === 'storefront'
                     ? 'bg-white text-slate-900 shadow-2xs font-bold'

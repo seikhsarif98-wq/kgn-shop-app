@@ -15,7 +15,7 @@ import { SuperAdminPortal } from './views/superadmin/SuperAdminPortal';
 import { AuthModal } from './views/auth/AuthModal';
 import { NewShopModal } from './views/admin/NewShopModal';
 import { MyOrdersModal } from './views/storefront/MyOrdersModal';
-import { parseStoreSlugFromUrl } from './lib/slugs';
+import { parseStoreSlugFromUrl, slugifyShopName } from './lib/slugs';
 
 export type AppMode = 'storefront' | 'directory' | 'admin' | 'super_admin';
 
@@ -74,7 +74,13 @@ const AppContent: React.FC = () => {
     setCurrentMode(mode);
 
     if (mode === 'storefront') {
-      const resolvedSlug = (targetSlug || (targetSlug === '' ? null : (currentStoreSlug || activeShop.slug))).toLowerCase();
+      // Strip any path/hash prefixes like "/store/" or "#/store/" if passed
+      let cleanTarget = targetSlug ? targetSlug.replace(/^#?\/?store\//i, '').replace(/^\/+/, '').trim() : '';
+      
+      const fallbackStoreSlug = shops?.[0]?.slug || (shops?.[0]?.shopName ? slugifyShopName(shops[0].shopName) : null);
+      const activeStoreSlug = activeShop?.slug || (activeShop?.shopName ? slugifyShopName(activeShop.shopName) : null);
+      const rawSlug = cleanTarget || activeStoreSlug || fallbackStoreSlug || currentStoreSlug;
+      const resolvedSlug = rawSlug ? slugifyShopName(rawSlug) : fallbackStoreSlug;
       setCurrentStoreSlug(resolvedSlug);
       
       // Sync active shop in context if matched
@@ -85,18 +91,28 @@ const AppContent: React.FC = () => {
         }
       }
 
-      if (typeof window !== 'undefined' && window.history?.pushState) {
-        const newPath = resolvedSlug ? `/store/${resolvedSlug}` : '/';
-        window.history.pushState(null, '', newPath);
+      if (typeof window !== 'undefined') {
+        const newHash = resolvedSlug ? `#/store/${resolvedSlug}` : '#/';
+        if (window.history?.pushState) {
+          window.history.pushState(null, '', newHash);
+        } else {
+          window.location.hash = newHash;
+        }
       }
     } else {
-      if (typeof window !== 'undefined' && window.history?.pushState) {
+      if (typeof window !== 'undefined') {
+        let newHash = '#/';
         if (mode === 'super_admin') {
-          window.history.pushState(null, '', '/admin-login');
+          newHash = '#/admin-login';
         } else if (mode === 'admin') {
-          window.history.pushState(null, '', '/dashboard');
+          newHash = '#/dashboard';
         } else if (mode === 'directory') {
-          window.history.pushState(null, '', '/shops');
+          newHash = '#/shops';
+        }
+        if (window.history?.pushState) {
+          window.history.pushState(null, '', newHash);
+        } else {
+          window.location.hash = newHash;
         }
       }
     }
@@ -127,6 +143,13 @@ const AppContent: React.FC = () => {
       const hash = window.location.hash.toLowerCase();
       const parsedSlug = parseStoreSlugFromUrl();
       setCurrentStoreSlug(parsedSlug);
+
+      if (parsedSlug) {
+        const matched = getShopBySlug(parsedSlug);
+        if (matched) {
+          setActiveShopId(matched.id);
+        }
+      }
 
       if (
         path === '/super-admin' || 
@@ -253,6 +276,7 @@ const AppContent: React.FC = () => {
       <NewShopModal
         isOpen={isNewShopOpen}
         onClose={() => setIsNewShopOpen(false)}
+        onNavigateToStorefront={(slug) => handleModeChange('storefront', slug || activeShop.slug)}
       />
     </div>
   );

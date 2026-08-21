@@ -102,7 +102,7 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
 
   const handleShareStore = () => {
     if (!displayShop) return;
-    const shareUrl = getShareableStoreUrl(displayShop.slug);
+    const shareUrl = getShareableStoreUrl(displayShop.slug || displayShop.shopName);
     if (navigator.share) {
       navigator.share({
         title: displayShop.shopName,

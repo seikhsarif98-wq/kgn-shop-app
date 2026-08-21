@@ -30,6 +30,7 @@ import { KhataManager } from './KhataManager';
 import { ShopSettings } from './ShopSettings';
 import { SubscriptionPlans } from './SubscriptionPlans';
 import { NewShopModal } from './NewShopModal';
+import { slugifyShopName } from '../../lib/slugs';
 
 export type AdminTab = 'overview' | 'pos' | 'catalog' | 'orders' | 'khata' | 'settings' | 'subscription';
 
@@ -260,6 +261,19 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
             </div>
 
             <button
+              id="sidebar-view-storefront-btn"
+              type="button"
+              onClick={() => {
+                const targetSlug = activeShop?.slug || (activeShop?.shopName ? slugifyShopName(activeShop.shopName) : '') || 'store';
+                onNavigateToStorefront?.('/store/' + targetSlug);
+              }}
+              className="w-full py-1.5 px-2.5 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition flex items-center justify-center gap-1.5 border border-blue-100 cursor-pointer"
+            >
+              <Store className="w-3.5 h-3.5 text-blue-600" />
+              <span>View Public Storefront</span>
+            </button>
+
+            <button
               onClick={handleLockTerminal}
               className="w-full py-1.5 px-2.5 text-[11px] font-semibold text-slate-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition flex items-center justify-center gap-1.5"
             >
@@ -279,7 +293,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
                 setActiveTab('catalog');
                 setIsAddProductOpen(true);
               }}
-              onViewStorefront={() => onNavigateToStorefront?.(activeShop.slug)}
+              onViewStorefront={(slug) => onNavigateToStorefront?.(slug || activeShop.slug || activeShop.shopName)}
             />
           )}
 
@@ -296,7 +310,11 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
 
           {activeTab === 'khata' && <KhataManager />}
 
-          {activeTab === 'settings' && <ShopSettings />}
+          {activeTab === 'settings' && (
+            <ShopSettings 
+              onViewStorefront={(slug) => onNavigateToStorefront?.(slug || activeShop.slug || activeShop.shopName)} 
+            />
+          )}
 
           {activeTab === 'subscription' && <SubscriptionPlans />}
         </div>
@@ -307,6 +325,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({
       <NewShopModal
         isOpen={isNewShopModalOpen}
         onClose={() => setIsNewShopModalOpen(false)}
+        onNavigateToStorefront={(slug) => onNavigateToStorefront?.(slug || activeShop.slug)}
       />
 
     </div>

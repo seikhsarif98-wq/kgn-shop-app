@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useShop } from '../../context/ShopContext';
-import { useAuth } from '../../context/AuthContext';
 import { 
   ShoppingBag, 
   Package, 
@@ -21,12 +20,12 @@ import {
   MessageCircle,
   Share2
 } from 'lucide-react';
-import { getShareableStoreUrl, getWhatsAppShareUrl } from '../../lib/slugs';
+import { getShareableStoreUrl, getWhatsAppShareUrl, slugifyShopName } from '../../lib/slugs';
 
 interface DashboardOverviewProps {
   onNavigate: (tab: 'pos' | 'catalog' | 'orders' | 'khata' | 'settings' | 'subscription') => void;
   onOpenAddProduct: () => void;
-  onViewStorefront?: () => void;
+  onViewStorefront?: (slug?: string) => void;
 }
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ 
@@ -34,12 +33,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onOpenAddProduct,
   onViewStorefront 
 }) => {
-  const { activeShop, products, orders, khataCustomers } = useShop();
-  const { profile } = useAuth();
+  const { activeShop, shops, products, orders, khataCustomers } = useShop();
   const [copied, setCopied] = useState(false);
 
-  const shareableUrl = getShareableStoreUrl(activeShop.slug);
-  const whatsappShareUrl = getWhatsAppShareUrl(activeShop.shopName, shareableUrl, activeShop.whatsappNumber || activeShop.phone);
+  // Single reactive source of truth for current active store
+  const currentStore = activeShop || shops[0];
+  const fallbackSlug = shops?.[0]?.slug || (shops?.[0]?.shopName ? slugifyShopName(shops[0].shopName) : 'store');
+  const storeSlug = currentStore?.slug || (currentStore?.shopName ? slugifyShopName(currentStore.shopName) : '') || fallbackSlug;
+  const shareableUrl = getShareableStoreUrl(storeSlug);
+  const whatsappShareUrl = getWhatsAppShareUrl(currentStore?.shopName || 'Store', shareableUrl, currentStore?.whatsappNumber || currentStore?.phone);
 
   const handleCopyLink = () => {
     if (navigator.clipboard) {
@@ -118,8 +120,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
             {onViewStorefront && (
               <button
                 id="dash-preview-storefront-btn"
-                onClick={onViewStorefront}
-                className="px-5 py-2.5 bg-slate-800/60 text-slate-300 rounded-xl font-semibold text-xs border border-slate-700/80 hover:bg-slate-800 hover:text-white transition flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => {
+                  const targetSlug = currentStore?.slug || storeSlug || fallbackSlug;
+                  onViewStorefront('/store/' + targetSlug);
+                }}
+                title={`Open /store/${storeSlug}`}
+                className="px-5 py-2.5 bg-slate-800/60 text-slate-300 rounded-xl font-semibold text-xs border border-slate-700/80 hover:bg-slate-800 hover:text-white transition flex items-center justify-center gap-2 cursor-pointer"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>View Public Storefront</span>
@@ -148,15 +155,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </span>
               </div>
               <p className="text-slate-500 text-xs mt-0.5">
-                Slug: <strong className="font-mono text-slate-800">/store/{activeShop.slug}</strong> • Share this link with customers on WhatsApp, Instagram, and SMS.
+                Slug: <strong className="font-mono text-slate-800">/store/{storeSlug}</strong> • Share this link with customers on WhatsApp, Instagram, and SMS.
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             {/* Display Link Box */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 flex items-center gap-2 max-w-xs sm:max-w-none">
-              <span className="text-xs font-mono font-semibold text-slate-700 truncate">
+            <div id="dash-store-link-display-box" className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 flex items-center gap-2 max-w-xs sm:max-w-none">
+              <span id="dash-store-link-display-text" className="text-xs font-mono font-semibold text-slate-700 truncate">
                 {shareableUrl}
               </span>
             </div>

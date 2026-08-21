@@ -6,24 +6,28 @@
 import { Shop } from '../types';
 
 /**
- * Normalizes a shop name into a clean, URL-safe base slug.
- * e.g., "KGN Super Market & Kirana" -> "kgn-super-market-kirana"
- * e.g., "Al-Madina 100% Halal!" -> "al-madina-100-halal"
+ * Normalizes a shop name into a clean, URL-friendly slug:
+ * 1. Converts to lowercase.
+ * 2. Replaces spaces with hyphens (-).
+ * 3. Removes special characters.
+ * Example: "Fancy dukan" -> "fancy-dukan"
  */
 export function slugifyShopName(name: string): string {
-  if (!name) return 'store';
+  if (!name || typeof name !== 'string') return 'store';
   
   const clean = name
     .toLowerCase()
     .trim()
-    // Replace accents/diacritics if any
+    // Normalize unicode/diacritics
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    // Remove apostrophes and quotes cleanly
-    .replace(/['"`]/g, '')
-    // Replace any non-alphanumeric character with hyphen
-    .replace(/[^a-z0-9]+/g, '-')
-    // Remove leading and trailing hyphens
+    // Replace '&' with 'and'
+    .replace(/&/g, 'and')
+    // Remove all special characters except letters, numbers, and spaces/hyphens
+    .replace(/[^a-z0-9\s-]/g, '')
+    // Replace any sequence of whitespace or hyphens with a single hyphen (-)
+    .replace(/[\s-]+/g, '-')
+    // Strip leading and trailing hyphens
     .replace(/^-+|-+$/g, '');
 
   return clean || 'store';
@@ -40,8 +44,8 @@ export function isValidShopSlug(slug: string): boolean {
 /**
  * Dynamically parses the target store slug from the current browser URL.
  * Supports:
- * 1. Pathname: /store/:storeSlug (e.g. /store/fancy-dukan, /store/kgn-supermarket)
- * 2. Hash: #/store/:storeSlug or #store/:storeSlug
+ * 1. Pathname: /store/:storeSlug or /store/:storeSlug/ (e.g. /store/fancy-dukan, /store/Fancy-Dukan/)
+ * 2. Hash: #/store/:storeSlug or #store/:storeSlug or #/store/:storeSlug/
  * 3. Search parameters: ?store=:storeSlug or ?slug=:storeSlug
  */
 export function parseStoreSlugFromUrl(): string | null {
@@ -51,21 +55,21 @@ export function parseStoreSlugFromUrl(): string | null {
     const path = window.location.pathname;
     const hash = window.location.hash;
 
-    // 1. Match pathname: /store/:slug or /store/:slug/
-    const pathMatch = path.match(/^\/store\/([a-zA-Z0-9_-]+)/i);
+    // 1. Match pathname: /store/:slug or /store/:slug/ or /store/:slug?...
+    const pathMatch = path.match(/^\/store\/([^/?#]+)/i);
     if (pathMatch && pathMatch[1]) {
-      const candidate = decodeURIComponent(pathMatch[1]).trim().toLowerCase();
-      if (candidate && candidate !== 'undefined' && candidate !== 'null') {
-        return candidate;
+      const candidate = decodeURIComponent(pathMatch[1]).trim().replace(/\/+$/, '');
+      if (candidate && candidate.toLowerCase() !== 'undefined' && candidate.toLowerCase() !== 'null') {
+        return slugifyShopName(candidate);
       }
     }
 
-    // 2. Match hash: #/store/:slug or #store/:slug
-    const hashMatch = hash.match(/^#\/?store\/([a-zA-Z0-9_-]+)/i);
+    // 2. Match hash: #/store/:slug or #store/:slug or #/store/:slug/
+    const hashMatch = hash.match(/^#\/?store\/([^/?#]+)/i);
     if (hashMatch && hashMatch[1]) {
-      const candidate = decodeURIComponent(hashMatch[1]).trim().toLowerCase();
-      if (candidate && candidate !== 'undefined' && candidate !== 'null') {
-        return candidate;
+      const candidate = decodeURIComponent(hashMatch[1]).trim().replace(/\/+$/, '');
+      if (candidate && candidate.toLowerCase() !== 'undefined' && candidate.toLowerCase() !== 'null') {
+        return slugifyShopName(candidate);
       }
     }
 
@@ -73,9 +77,9 @@ export function parseStoreSlugFromUrl(): string | null {
     const searchParams = new URLSearchParams(window.location.search);
     const querySlug = searchParams.get('store') || searchParams.get('slug');
     if (querySlug) {
-      const candidate = querySlug.trim().toLowerCase();
-      if (candidate && candidate !== 'undefined' && candidate !== 'null') {
-        return candidate;
+      const candidate = querySlug.trim().replace(/\/+$/, '');
+      if (candidate && candidate.toLowerCase() !== 'undefined' && candidate.toLowerCase() !== 'null') {
+        return slugifyShopName(candidate);
       }
     }
   } catch (e) {
@@ -143,11 +147,22 @@ export function generateUniqueShopSlug(
 }
 
 /**
- * Returns the full shareable URL for a store slug.
+ * Returns the full shareable URL for a store slug, strictly derived from shopName / slug.
  */
-export function getShareableStoreUrl(slug: string, origin?: string): string {
+export function getShareableStoreUrl(shopOrSlug: string | { slug?: string; shopName?: string }, origin?: string): string {
+  let targetSlug = 'store';
+  if (typeof shopOrSlug === 'string') {
+    targetSlug = slugifyShopName(shopOrSlug);
+  } else if (shopOrSlug && typeof shopOrSlug === 'object') {
+    if (shopOrSlug.slug && shopOrSlug.slug.trim()) {
+      targetSlug = slugifyShopName(shopOrSlug.slug);
+    } else if (shopOrSlug.shopName && shopOrSlug.shopName.trim()) {
+      targetSlug = slugifyShopName(shopOrSlug.shopName);
+    }
+  }
+
   const base = origin || (typeof window !== 'undefined' ? window.location.origin : '');
-  return `${base}/store/${slug}`;
+  return `${base}/#/store/${targetSlug}`;
 }
 
 /**
