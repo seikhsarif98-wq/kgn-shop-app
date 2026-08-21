@@ -51,6 +51,7 @@ export interface Shop {
   bannerUrl?: string;
   tier: SubscriptionTier;
   adminPin?: string;
+  customCategories?: string[];
   pendingUpgradeTier?: SubscriptionTier | null;
   pendingUtrNumber?: string | null;
   currency: string;

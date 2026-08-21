@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useShop } from '../../context/ShopContext';
 import { 
   Plus, 
@@ -19,12 +19,19 @@ import {
   Zap,
   Lock,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  BookmarkCheck,
+  CornerDownRight
 } from 'lucide-react';
 import { Product, SubscriptionTier } from '../../types';
 import { MediaCaptureModal } from '../../components/common/MediaCaptureModal';
 import { UsageMeter } from '../../components/admin/UsageMeter';
 import { TIER_PLANS } from '../../lib/plans';
+import { 
+  getAdaptiveCategoriesForShop, 
+  BUSINESS_STORE_TYPES, 
+  UNIVERSAL_DEFAULT_CATEGORIES 
+} from '../../lib/categories';
 
 interface ProductManagementProps {
   isAddModalOpen?: boolean;
@@ -44,17 +51,26 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
     isProductLimitReached,
     tierPlan,
     productLimit,
-    upgradePlan 
+    upgradePlan,
+    addCustomCategory,
+    removeCustomCategory
   } = useShop();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'low_stock' | 'out_of_stock'>('all');
   
-  // Custom categories state
-  const [customCategories, setCustomCategories] = useState<string[]>([
-    'Grocery', 'Dairy & Milk', 'Spices & Masala', 'Beverages', 'Snacks', 'Personal Care'
-  ]);
+  // Adaptive categories calculated from current store type + custom store categories
+  const shopAdaptiveCategories = useMemo(() => {
+    return getAdaptiveCategoriesForShop(activeShop?.category, activeShop?.customCategories || []);
+  }, [activeShop?.category, activeShop?.customCategories]);
+
+  // Inline Category Creator inside Add/Edit Product Modal
+  const [isAddingInlineCategory, setIsAddingInlineCategory] = useState(false);
+  const [inlineCategoryInput, setInlineCategoryInput] = useState('');
+  const [categoryCreatedFeedback, setCategoryCreatedFeedback] = useState<string | null>(null);
+
+  // Category Manager Modal state
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [isTierUpgradeModalOpen, setIsTierUpgradeModalOpen] = useState(false);
@@ -67,7 +83,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
 
   // Form fields
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('Grocery');
+  const [category, setCategory] = useState(() => shopAdaptiveCategories[0] || 'General');
   const [description, setDescription] = useState('');
   const [mrp, setMrp] = useState<number | ''>('');
   const [sellingPrice, setSellingPrice] = useState<number | ''>('');
@@ -77,8 +93,10 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
   const [barcode, setBarcode] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
 
-  // Merged categories (default + existing product categories + custom)
-  const allCategories = Array.from(new Set(['All', ...customCategories, ...products.map(p => p.category)]));
+  // Merged categories (Adaptive store categories + existing product categories + custom)
+  const allCategories = useMemo(() => {
+    return Array.from(new Set(['All', ...shopAdaptiveCategories, ...products.map(p => p.category)]));
+  }, [shopAdaptiveCategories, products]);
 
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -96,7 +114,10 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
     }
     setEditingProduct(null);
     setName('');
-    setCategory(customCategories[0] || 'Grocery');
+    setCategory(shopAdaptiveCategories[0] || 'General');
+    setIsAddingInlineCategory(false);
+    setInlineCategoryInput('');
+    setCategoryCreatedFeedback(null);
     setDescription('');
     setMrp('');
     setSellingPrice('');
@@ -112,6 +133,9 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
     setEditingProduct(product);
     setName(product.name);
     setCategory(product.category);
+    setIsAddingInlineCategory(false);
+    setInlineCategoryInput('');
+    setCategoryCreatedFeedback(null);
     setDescription(product.description || '');
     setMrp(product.mrp || '');
     setSellingPrice(product.sellingPrice);
@@ -186,14 +210,36 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
     }
   };
 
-  const handleAddCategory = (e: React.FormEvent) => {
+  const handleSaveInlineCategory = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = inlineCategoryInput.trim();
+    if (!trimmed) return;
+
+    try {
+      await addCustomCategory(trimmed);
+      setCategory(trimmed);
+      setInlineCategoryInput('');
+      setIsAddingInlineCategory(false);
+      setCategoryCreatedFeedback(`Category "${trimmed}" saved to your store and selected!`);
+      setTimeout(() => setCategoryCreatedFeedback(null), 4000);
+    } catch (err) {
+      console.error('Failed to add custom category:', err);
+    }
+  };
+
+  const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = newCategoryName.trim();
-    if (trimmed && !customCategories.includes(trimmed)) {
-      setCustomCategories(prev => [...prev, trimmed]);
+    if (trimmed) {
+      await addCustomCategory(trimmed);
       setCategory(trimmed);
       setNewCategoryName('');
-      setIsCategoryModalOpen(false);
+    }
+  };
+
+  const handleRemoveCustomCategory = async (catName: string) => {
+    if (confirm(`Remove custom category "${catName}" from store settings?`)) {
+      await removeCustomCategory(catName);
     }
   };
 
@@ -438,12 +484,17 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
       {/* 4. CATEGORY MANAGER MODAL */}
       {isCategoryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-md overflow-hidden flex flex-col">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50">
-              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                <Layers className="w-4 h-4 text-slate-700" />
-                Product Categories Manager
-              </h3>
+              <div>
+                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-slate-700" />
+                  Product Categories Manager
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Store Type: <strong className="text-slate-800">{activeShop.category || 'General Store'}</strong> • Auto-filtered categories
+                </p>
+              </div>
               <button
                 onClick={() => setIsCategoryModalOpen(false)}
                 className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
@@ -452,39 +503,80 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
               </button>
             </div>
 
-            <div className="p-5 space-y-4 text-xs">
-              {/* Add New Category Form */}
-              <form onSubmit={handleAddCategory} className="flex gap-2">
-                <input
-                  type="text"
-                  required
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="New category name (e.g. Dry Fruits)"
-                  className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-slate-900 text-xs"
-                />
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-xs transition shrink-0"
-                >
-                  Add Category
-                </button>
-              </form>
+            <div className="p-5 space-y-4 text-xs overflow-y-auto flex-1">
+              {/* Add New Custom Category Form */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  + Create Custom Category
+                </label>
+                <form onSubmit={handleAddCategory} className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="e.g. Dry Fruits, Tempered Glass, Party Wear..."
+                    className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-slate-900 text-xs"
+                  />
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-xs transition shrink-0 flex items-center gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Add to Store</span>
+                  </button>
+                </form>
+                <p className="text-[10px] text-slate-400">
+                  Custom categories are saved directly to your store settings and will appear across the catalog & POS.
+                </p>
+              </div>
 
-              {/* Existing Categories List */}
-              <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Active Categories
+              {/* Custom Store Categories (if any) */}
+              {activeShop.customCategories && activeShop.customCategories.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-[11px] font-bold text-blue-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Your Custom Categories ({activeShop.customCategories.length})</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {activeShop.customCategories.map(cat => (
+                      <span
+                        key={cat}
+                        className="px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-950 font-semibold flex items-center gap-2 shadow-2xs"
+                      >
+                        <span>{cat}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCustomCategory(cat)}
+                          className="text-blue-400 hover:text-rose-600 p-0.5 rounded transition"
+                          title="Remove custom category"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  {customCategories.map(cat => (
-                    <span
-                      key={cat}
-                      className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 font-semibold flex items-center gap-1.5"
-                    >
-                      <span>{cat}</span>
-                    </span>
-                  ))}
+              )}
+
+              {/* Adaptive Categories for Store Type */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-bold text-slate-600 uppercase tracking-wider flex items-center justify-between">
+                  <span>Adaptive Categories for {activeShop.category}</span>
+                  <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-semibold">Store Type Default</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {shopAdaptiveCategories
+                    .filter(cat => !(activeShop.customCategories || []).includes(cat))
+                    .map(cat => (
+                      <span
+                        key={cat}
+                        className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 font-medium flex items-center gap-1.5"
+                      >
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>{cat}</span>
+                      </span>
+                    ))}
                 </div>
               </div>
             </div>
@@ -492,7 +584,7 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
               <button
                 onClick={() => setIsCategoryModalOpen(false)}
-                className="px-4 py-2 bg-slate-900 text-white font-semibold text-xs rounded-xl hover:bg-slate-800"
+                className="px-5 py-2 bg-slate-900 text-white font-semibold text-xs rounded-xl hover:bg-slate-800 transition"
               >
                 Done
               </button>
@@ -508,9 +600,14 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
             
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <h3 className="font-bold text-slate-900 text-base">
-                {editingProduct ? 'Edit Product Details' : 'Add New Product to Store'}
-              </h3>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">
+                  {editingProduct ? 'Edit Product Details' : 'Add New Product to Store'}
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Store: <strong className="text-slate-800">{activeShop.shopName}</strong> ({activeShop.category})
+                </p>
+              </div>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg transition"
@@ -566,43 +663,158 @@ export const ProductManagement: React.FC<ProductManagementProps> = ({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Fortune Refined Sunflower Oil (1L)"
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-slate-900"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-slate-900 font-medium"
                 />
               </div>
 
               {/* Category & Unit */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Category</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-slate-900"
-                  >
-                    {customCategories.map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  
+                  {/* Enhanced Category Selector with Dynamic Management */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-semibold text-slate-700">Category *</label>
+                      <button
+                        type="button"
+                        id="toggle-inline-custom-cat-btn"
+                        onClick={() => setIsAddingInlineCategory(!isAddingInlineCategory)}
+                        className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add Custom</span>
+                      </button>
+                    </div>
+
+                    <select
+                      value={category}
+                      onChange={(e) => {
+                        if (e.target.value === '__ADD_NEW_CUSTOM_TRIGGER__') {
+                          setIsAddingInlineCategory(true);
+                        } else {
+                          setCategory(e.target.value);
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-slate-900 font-medium text-slate-800"
+                    >
+                      <option value="__ADD_NEW_CUSTOM_TRIGGER__">✨ + Add Custom Category...</option>
+
+                      {/* Custom Categories saved for this store */}
+                      {activeShop?.customCategories && activeShop.customCategories.length > 0 && (
+                        <optgroup label="🌟 My Custom Categories (Saved)">
+                          {activeShop.customCategories.map(c => (
+                            <option key={`custom-${c}`} value={c}>
+                              ⭐ {c} (Custom)
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+
+                      {/* Store-Type Adaptive Categories */}
+                      <optgroup label={`✨ Recommended for ${activeShop?.category || 'Store'}`}>
+                        {shopAdaptiveCategories
+                          .filter(c => !(activeShop?.customCategories || []).includes(c))
+                          .map(c => (
+                            <option key={`adaptive-${c}`} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                      </optgroup>
+
+                      {/* Other Universal Categories */}
+                      <optgroup label="🌐 All Other Categories">
+                        {UNIVERSAL_DEFAULT_CATEGORIES
+                          .filter(c => !shopAdaptiveCategories.includes(c))
+                          .map(c => (
+                            <option key={`universal-${c}`} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                      </optgroup>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Unit of Measure</label>
+                    <select
+                      value={unit}
+                      onChange={(e) => setUnit(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-slate-900"
+                    >
+                      <option value="packet">packet</option>
+                      <option value="piece">piece (pc)</option>
+                      <option value="kg">kg (Kilogram)</option>
+                      <option value="gram">gram (g)</option>
+                      <option value="liter">liter (L)</option>
+                      <option value="ml">ml (Milliliter)</option>
+                      <option value="box">box</option>
+                      <option value="bottle">bottle</option>
+                      <option value="pair">pair</option>
+                      <option value="set">set</option>
+                      <option value="meter">meter (m)</option>
+                      <option value="dozen">dozen</option>
+                    </select>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Unit of Measure</label>
-                  <select
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:border-slate-900"
-                  >
-                    <option value="packet">packet</option>
-                    <option value="piece">piece</option>
-                    <option value="kg">kg</option>
-                    <option value="gram">gram (g)</option>
-                    <option value="liter">liter (L)</option>
-                    <option value="ml">ml</option>
-                    <option value="box">box</option>
-                    <option value="bottle">bottle</option>
-                    <option value="dozen">dozen</option>
-                  </select>
-                </div>
+                {/* Inline Custom Category Creator Box */}
+                {isAddingInlineCategory && (
+                  <div className="p-3 bg-blue-50/90 border border-blue-200 rounded-2xl space-y-2 animate-in fade-in zoom-in-95">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-blue-900">
+                      <span className="flex items-center gap-1.5">
+                        <FolderPlus className="w-3.5 h-3.5 text-blue-600" />
+                        Create & Save Custom Category to Store
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingInlineCategory(false);
+                          setInlineCategoryInput('');
+                        }}
+                        className="text-slate-400 hover:text-slate-600 p-0.5 rounded"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={inlineCategoryInput}
+                        onChange={(e) => setInlineCategoryInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSaveInlineCategory();
+                          }
+                        }}
+                        placeholder="e.g. Dry Fruits & Nuts, Screen Protectors..."
+                        className="flex-1 px-3 py-1.5 text-xs bg-white border border-blue-200 rounded-xl focus:outline-none focus:border-blue-600 text-slate-800"
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        id="save-inline-custom-cat-btn"
+                        onClick={() => handleSaveInlineCategory()}
+                        className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition shrink-0 flex items-center gap-1 shadow-2xs"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Save to Store</span>
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-blue-700">
+                      Stored in your store settings so you can reuse it for future products anytime.
+                    </p>
+                  </div>
+                )}
+
+                {/* Category Created Feedback */}
+                {categoryCreatedFeedback && (
+                  <div className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl flex items-center gap-1.5 animate-in fade-in">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{categoryCreatedFeedback}</span>
+                  </div>
+                )}
               </div>
 
               {/* Pricing & Stock */}

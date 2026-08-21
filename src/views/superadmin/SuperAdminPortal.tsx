@@ -39,7 +39,7 @@ import { SuperAdminLoginScreen } from './SuperAdminLoginScreen';
 
 interface SuperAdminPortalProps {
   onNavigateToShopAdmin?: (shopId: string) => void;
-  onNavigateToStorefront?: () => void;
+  onNavigateToStorefront?: (slug?: string) => void;
 }
 
 export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
@@ -694,6 +694,19 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
                       </td>
 
                       <td className="p-3.5 pr-5 text-right space-x-2">
+                        {onNavigateToStorefront && (
+                          <button
+                            onClick={() => {
+                              setActiveShopId(shop.id);
+                              onNavigateToStorefront(shop.slug);
+                            }}
+                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-lg text-[11px] font-semibold transition inline-flex items-center gap-1"
+                            title="View Public Storefront"
+                          >
+                            <ExternalLink className="w-3 h-3" />
+                            <span>Storefront</span>
+                          </button>
+                        )}
                         {onNavigateToShopAdmin && (
                           <button
                             onClick={() => {

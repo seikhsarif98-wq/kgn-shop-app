@@ -358,6 +358,46 @@ export const ShopDirectoryView: React.FC<ShopDirectoryViewProps> = ({
         </div>
       )}
 
+      {/* Directory Footer with Owner Access Links */}
+      <footer className="mt-16 border-t border-slate-200 bg-white -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-medium">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="font-semibold text-slate-600">Platform Status: Active Multi-Tenant Directory</span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 text-xs">
+            <span className="text-slate-400 font-semibold uppercase tracking-wider text-[10px]">Owner Access:</span>
+            <button
+              id="dir-footer-admin-link"
+              onClick={() => onSelectShop(activeShop.id, 'admin')}
+              className="text-slate-600 hover:text-slate-900 font-bold hover:underline transition flex items-center gap-1"
+            >
+              <Store className="w-3.5 h-3.5 text-slate-400" />
+              <span>Admin Portal (/admin)</span>
+            </button>
+            <span className="text-slate-300">•</span>
+            <button
+              id="dir-footer-super-admin-link"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  window.location.hash = '#/super-admin';
+                  window.dispatchEvent(new HashChangeEvent('hashchange'));
+                }
+              }}
+              className="text-purple-700 hover:text-purple-900 font-bold hover:underline transition flex items-center gap-1"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />
+              <span>Super Admin (/super-admin)</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold text-slate-400">
+            <span>KGN Shop SaaS Platform</span>
+          </div>
+        </div>
+      </footer>
+
     </div>
   );
 };

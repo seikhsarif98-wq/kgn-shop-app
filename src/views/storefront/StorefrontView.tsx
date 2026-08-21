@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useShop } from '../../context/ShopContext';
 import { 
   Search, 
@@ -13,29 +13,81 @@ import {
   Check, 
   Share2, 
   QrCode,
-  ShieldCheck,
-  Store,
-  Truck
+  ShieldCheck, 
+  Store, 
+  Truck,
+  AlertCircle,
+  Compass,
+  ArrowRight,
+  RefreshCw,
+  ExternalLink
 } from 'lucide-react';
-import { Product } from '../../types';
+import { Product, Shop } from '../../types';
+import { parseStoreSlugFromUrl, getShareableStoreUrl, getWhatsAppShareUrl } from '../../lib/slugs';
 
 interface StorefrontViewProps {
+  storeSlug?: string | null;
   onOpenCart: () => void;
   onOpenAuth: () => void;
+  onOpenOrders?: () => void;
+  onOpenNewShopModal?: () => void;
+  onNavigateToMode?: (mode: 'storefront' | 'directory' | 'admin' | 'super_admin', targetSlug?: string) => void;
 }
 
-export const StorefrontView: React.FC<StorefrontViewProps> = ({ onOpenCart, onOpenAuth }) => {
-  const { activeShop, products, cart, addToCart, updateCartQuantity, cartTotal, cartItemCount } = useShop();
+export const StorefrontView: React.FC<StorefrontViewProps> = ({ 
+  storeSlug,
+  onOpenCart, 
+  onOpenAuth, 
+  onOpenOrders, 
+  onOpenNewShopModal,
+  onNavigateToMode 
+}) => {
+  const { 
+    activeShop, 
+    shops, 
+    isShopsLoaded, 
+    getShopBySlug, 
+    getProductsForShop,
+    setActiveShopId,
+    cart, 
+    addToCart, 
+    updateCartQuantity, 
+    cartTotal, 
+    cartItemCount 
+  } = useShop();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Determine target slug from prop or browser URL
+  const currentSlugFromUrl = parseStoreSlugFromUrl();
+  const targetSlug = (storeSlug || currentSlugFromUrl || '').trim().toLowerCase();
+
+  // If a slug was explicitly requested via URL (e.g. /store/:slug), resolve that specific shop
+  const matchedShop = targetSlug ? getShopBySlug(targetSlug) : null;
+  const isSpecificSlugRequested = Boolean(targetSlug);
+
+  // Determine the shop to display:
+  // If a specific slug is requested: use ONLY the matched shop. (If not found -> 404).
+  // If NO specific slug in URL: use activeShop.
+  const displayShop: Shop | null = isSpecificSlugRequested ? (matchedShop || null) : activeShop;
+
+  // Sync activeShopId in context so cart & POS operations link to this exact shop
+  useEffect(() => {
+    if (displayShop && displayShop.id !== activeShop.id) {
+      setActiveShopId(displayShop.id);
+    }
+  }, [displayShop?.id]);
+
+  // Retrieve products strictly for the display shop
+  const shopProducts = displayShop ? getProductsForShop(displayShop.id, displayShop.shopOwnerId) : [];
+
   // Extract unique categories from current shop's isolated products
-  const categories = ['All', ...Array.from(new Set<string>(products.map(p => p.category)))];
+  const categories = ['All', ...Array.from(new Set<string>(shopProducts.map(p => p.category)))];
 
   // Filter products by search and category
-  const filteredProducts = products.filter(product => {
+  const filteredProducts = shopProducts.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
                           (product.category && product.category.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -49,18 +101,143 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({ onOpenCart, onOp
   };
 
   const handleShareStore = () => {
+    if (!displayShop) return;
+    const shareUrl = getShareableStoreUrl(displayShop.slug);
     if (navigator.share) {
       navigator.share({
-        title: activeShop.shopName,
-        text: `Shop products online from ${activeShop.shopName}!`,
-        url: window.location.href,
+        title: displayShop.shopName,
+        text: `Shop products online from ${displayShop.shopName}!`,
+        url: shareUrl,
       }).catch(() => {});
     } else {
-      navigator.clipboard.writeText(window.location.href);
+      navigator.clipboard.writeText(shareUrl);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2000);
     }
   };
+
+  // --------------------------------------------------------------------------
+  // 1. LOADING STATE (Waiting for Firestore / local state initialization)
+  // --------------------------------------------------------------------------
+  if (isSpecificSlugRequested && !displayShop && !isShopsLoaded) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-12 h-12 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center mb-4">
+          <RefreshCw className="w-6 h-6 text-slate-700 animate-spin" />
+        </div>
+        <h2 className="text-lg font-bold text-slate-900">Locating Storefront...</h2>
+        <p className="text-xs text-slate-500 mt-1 max-w-sm">
+          Fetching digital catalog and merchant details for <span className="font-mono text-slate-700 font-bold">/store/{targetSlug}</span>
+        </p>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 2. STORE NOT FOUND 404 STATE (NO Hardcoded Fallback)
+  // --------------------------------------------------------------------------
+  if (isSpecificSlugRequested && !displayShop) {
+    return (
+      <div id="store-not-found-container" className="min-h-screen bg-[#F8FAFC] text-[#0F172A] flex flex-col justify-between">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
+          
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold mb-6">
+            <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+            <span>HTTP 404 • Storefront Not Found</span>
+          </div>
+
+          {/* Headline */}
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+            Storefront Unavailable
+          </h1>
+
+          <p className="text-sm sm:text-base text-slate-600 mt-3 max-w-lg mx-auto leading-relaxed">
+            We could not locate any active merchant store at the custom link{' '}
+            <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">
+              /store/{targetSlug}
+            </span>.
+            The store may have been updated, renamed, or the link may have a typo.
+          </p>
+
+          {/* Action CTAs */}
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              id="btn-404-browse-shops"
+              onClick={() => onNavigateToMode ? onNavigateToMode('directory') : (window.location.href = '/shops')}
+              className="w-full sm:w-auto px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs shadow-xs transition flex items-center justify-center gap-2"
+            >
+              <Compass className="w-4 h-4 text-emerald-400" />
+              <span>Browse All Verified Stores ({shops.length})</span>
+            </button>
+
+            {onOpenNewShopModal && (
+              <button
+                id="btn-404-register-shop"
+                onClick={onOpenNewShopModal}
+                className="w-full sm:w-auto px-6 py-3 bg-white hover:bg-slate-50 border border-slate-200 text-slate-800 rounded-xl font-bold text-xs shadow-2xs transition flex items-center justify-center gap-2"
+              >
+                <Store className="w-4 h-4 text-blue-600" />
+                <span>Claim or Register This Store Name</span>
+              </button>
+            )}
+          </div>
+
+          {/* Other Available Stores Quick Links */}
+          <div className="mt-14 pt-10 border-t border-slate-200 text-left">
+            <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-4 text-center sm:text-left">
+              Explore Active Local Stores:
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {shops.slice(0, 6).map((shop) => (
+                <div
+                  key={shop.id}
+                  onClick={() => onNavigateToMode ? onNavigateToMode('storefront', shop.slug) : (window.location.href = `/store/${shop.slug}`)}
+                  className="bg-white p-3.5 rounded-2xl border border-slate-200 hover:border-slate-300 hover:shadow-sm cursor-pointer transition flex items-center gap-3 group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 overflow-hidden shrink-0 flex items-center justify-center p-1">
+                    <img 
+                      src={shop.logoUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=100&auto=format&fit=crop&q=80'} 
+                      alt={shop.shopName} 
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-slate-900 group-hover:text-blue-600 transition truncate">
+                      {shop.shopName}
+                    </div>
+                    <div className="text-[11px] text-slate-400 font-medium truncate">
+                      {shop.category} • {shop.city || 'India'}
+                    </div>
+                  </div>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-700 transition shrink-0" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+        {/* Footer */}
+        <footer className="border-t border-slate-200 bg-white py-6">
+          <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-400">
+            KGN Multi-Tenant Digital Storefront Engine • Instant WhatsApp & UPI Ordering
+          </div>
+        </footer>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------------------------------
+  // 3. REGULAR STOREFRONT VIEW (Dynamic Store Data)
+  // --------------------------------------------------------------------------
+  const shopData = displayShop!;
+  const waShareUrl = getWhatsAppShareUrl(
+    shopData.shopName, 
+    getShareableStoreUrl(shopData.slug), 
+    shopData.whatsappNumber || shopData.phone
+  );
 
   return (
     <div id="storefront-container" className="min-h-screen bg-[#F8FAFC] text-[#0F172A] pb-28">
@@ -74,8 +251,8 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({ onOpenCart, onOp
             <div className="flex items-start gap-4">
               <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-slate-50 border border-slate-200 p-2 shadow-2xs shrink-0 overflow-hidden flex items-center justify-center">
                 <img
-                  src={activeShop.logoUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=80'}
-                  alt={activeShop.shopName}
+                  src={shopData.logoUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=80'}
+                  alt={shopData.shopName}
                   className="w-full h-full object-cover rounded-xl"
                 />
               </div>
@@ -83,12 +260,12 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({ onOpenCart, onOp
               <div>
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-                    {activeShop.shopName}
+                    {shopData.shopName}
                   </h1>
                   <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 text-xs font-semibold border border-blue-100 uppercase tracking-wider">
-                    {activeShop.category}
+                    {shopData.category}
                   </span>
-                  {activeShop.isActive && (
+                  {shopData.isActive && (
                     <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       Live Store
@@ -97,17 +274,17 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({ onOpenCart, onOp
                 </div>
 
                 <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-xl">
-                  {activeShop.tagline || 'Direct storefront with instant home delivery, counter pickup, and UPI payments.'}
+                  {shopData.tagline || 'Direct storefront with instant home delivery, counter pickup, and UPI payments.'}
                 </p>
 
                 <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 mt-3">
                   <div className="flex items-center gap-1.5 text-slate-700">
                     <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>{activeShop.address || `${activeShop.city} - ${activeShop.pincode}`}</span>
+                    <span>{shopData.address || `${shopData.city} - ${shopData.pincode}`}</span>
                   </div>
                   <div className="flex items-center gap-1.5 text-slate-700">
                     <Phone className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    <span>{activeShop.phone}</span>
+                    <span>{shopData.phone}</span>
                   </div>
                 </div>
               </div>
@@ -117,7 +294,7 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({ onOpenCart, onOp
             <div className="flex items-center gap-2.5 self-stretch md:self-auto">
               <a
                 id="shop-direct-whatsapp-btn"
-                href={`https://wa.me/${activeShop.whatsappNumber || activeShop.phone.replace(/[^0-9]/g, '')}?text=Hi%20${encodeURIComponent(activeShop.shopName)},%20I%20want%20to%20place%20an%20order`}
+                href={`https://wa.me/${shopData.whatsappNumber || shopData.phone.replace(/[^0-9]/g, '')}?text=Hi%20${encodeURIComponent(shopData.shopName)},%20I%20want%20to%20place%20an%20order`}
                 target="_blank"
                 rel="noreferrer"
                 className="flex-1 md:flex-initial px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition"
@@ -180,7 +357,7 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({ onOpenCart, onOp
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={`Search catalog in ${activeShop.shopName}...`}
+              placeholder={`Search catalog in ${shopData.shopName}...`}
               className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 shadow-2xs transition"
             />
             {searchQuery && (
@@ -197,8 +374,8 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({ onOpenCart, onOp
           <div className="text-xs text-slate-500 font-semibold flex items-center gap-2">
             <span>Showing <strong className="text-slate-900">{filteredProducts.length}</strong> items</span>
             <span className="text-slate-300">•</span>
-            <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md font-bold text-[11px] border border-blue-100">
-              Direct Tenant Inventory
+            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md font-bold text-[11px] border border-emerald-100">
+              Fresh Inventory
             </span>
           </div>
         </div>
@@ -233,7 +410,7 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({ onOpenCart, onOp
             </div>
             <h3 className="text-base font-bold text-slate-900">No products found</h3>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              Try searching with another keyword or pick a different category.
+              This store has not listed products under this filter yet, or try searching another keyword.
             </p>
             <button
               onClick={() => {
@@ -379,17 +556,30 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({ onOpenCart, onOp
         </div>
       )}
 
-      {/* 5. Minimalist Footer */}
+      {/* 5. Minimalist Storefront Footer */}
       <footer className="mt-20 border-t border-slate-200 bg-white py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 font-medium">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 font-medium">
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="font-semibold text-slate-600">Store Status: Operational</span>
+            <span className="font-semibold text-slate-700">{shopData.shopName} • Open for Delivery & Pickup</span>
           </div>
-          <div className="flex items-center gap-4 text-[11px] uppercase tracking-wider font-semibold">
-            <span>Tenant: {activeShop.shopName}</span>
+
+          <div className="flex items-center gap-4 text-xs text-slate-400">
+            <span>Fast Home Delivery</span>
             <span>•</span>
-            <span>Powered by KGN Shop SaaS</span>
+            <span>Counter Pickup</span>
+            <span>•</span>
+            <span>UPI & Cash on Delivery</span>
+          </div>
+
+          <div className="flex items-center gap-3 text-xs">
+            <button
+              id="footer-merchant-login-btn"
+              onClick={onOpenAuth}
+              className="text-slate-500 hover:text-slate-900 transition font-medium"
+            >
+              Merchant / Staff Login
+            </button>
           </div>
         </div>
       </footer>

@@ -37,6 +37,7 @@ import {
   getTierProductLimit, 
   canAccessFeature 
 } from '../lib/plans';
+import { generateUniqueShopSlug } from '../lib/slugs';
 
 interface ShopContextType {
   shops: Shop[];
@@ -61,6 +62,11 @@ interface ShopContextType {
   canAccess: (feature: 'pos' | 'khata' | 'analytics' | 'whatsapp_sync' | 'custom_branding') => boolean;
   upgradePlan: (newTier: SubscriptionTier) => Promise<void>;
   
+  // Multi-Shop and Dynamic Slug Resolution
+  isShopsLoaded: boolean;
+  getShopBySlug: (slug: string) => Shop | undefined;
+  getProductsForShop: (shopId: string, shopOwnerId?: string) => Product[];
+  
   // Subscription Plan Upgrade Requests (Super Admin & Merchant)
   subscriptionRequests: SubscriptionRequest[];
   submitPlanUpgradeRequest: (requestedTier: SubscriptionTier, utrNumber: string, amount: number, receiptImageUrl?: string) => Promise<SubscriptionRequest>;
@@ -82,19 +88,66 @@ interface ShopContextType {
   
   updateShopProfile: (updates: Partial<Shop>) => Promise<void>;
   updateShopSettings: (updates: Partial<Shop>) => Promise<void>;
+  addCustomCategory: (categoryName: string) => Promise<void>;
+  removeCustomCategory: (categoryName: string) => Promise<void>;
   createNewShop: (shopData: Omit<Shop, 'id' | 'shopOwnerId' | 'createdAt'>) => Promise<Shop>;
 }
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
+const LOCAL_SHOPS_KEY = 'kgn_custom_shops';
+const LOCAL_PRODUCTS_KEY = 'kgn_custom_products';
+
+const getInitialShops = (): Shop[] => {
+  try {
+    const raw = localStorage.getItem(LOCAL_SHOPS_KEY);
+    if (raw) {
+      const customShops: Shop[] = JSON.parse(raw);
+      const merged = [...customShops];
+      INITIAL_SHOPS.forEach(initShop => {
+        if (!merged.some(s => s.id === initShop.id)) {
+          merged.push(initShop);
+        }
+      });
+      return merged;
+    }
+  } catch (e) {
+    console.warn('Could not parse local shops', e);
+  }
+  return INITIAL_SHOPS;
+};
+
+const getInitialProducts = (): Product[] => {
+  try {
+    const raw = localStorage.getItem(LOCAL_PRODUCTS_KEY);
+    if (raw) {
+      const customProds: Product[] = JSON.parse(raw);
+      const merged = [...customProds];
+      INITIAL_PRODUCTS.forEach(initP => {
+        if (!merged.some(p => p.id === initP.id)) {
+          merged.push(initP);
+        }
+      });
+      return merged;
+    }
+  } catch (e) {
+    console.warn('Could not parse local products', e);
+  }
+  return INITIAL_PRODUCTS;
+};
+
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { activeShopOwnerId, user, isDemoMode } = useAuth();
   
-  const [shops, setShops] = useState<Shop[]>(INITIAL_SHOPS);
-  const [activeShopId, setActiveShopIdState] = useState<string>(INITIAL_SHOPS[0].id);
+  const [shops, setShops] = useState<Shop[]>(getInitialShops);
+  const [isShopsLoaded, setIsShopsLoaded] = useState(false);
+  const [activeShopId, setActiveShopIdState] = useState<string>(() => {
+    const init = getInitialShops();
+    return init[0]?.id || INITIAL_SHOPS[0].id;
+  });
   
   // In-memory tenant data store
-  const [allProducts, setAllProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [allProducts, setAllProducts] = useState<Product[]>(getInitialProducts);
   const [allOrders, setAllOrders] = useState<Order[]>(INITIAL_ORDERS);
   const [allKhataCustomers, setAllKhataCustomers] = useState<KhataCustomer[]>(INITIAL_KHATA_CUSTOMERS);
   const [allKhataTransactions, setAllKhataTransactions] = useState<KhataTransaction[]>([]);
@@ -104,6 +157,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Find active shop
   const activeShop = shops.find(s => s.id === activeShopId) || shops[0] || INITIAL_SHOPS[0];
   const currentTenantOwnerId = isDemoMode ? activeShop.shopOwnerId : (user?.uid || activeShop.shopOwnerId);
+
+  // Helper: Retrieve shop by URL slug (case-insensitive)
+  const getShopBySlug = (slug: string): Shop | undefined => {
+    if (!slug) return undefined;
+    const cleanSlug = slug.trim().toLowerCase();
+    return shops.find(s => s.slug && s.slug.trim().toLowerCase() === cleanSlug);
+  };
+
+  // Helper: Retrieve isolated products for a specific shop
+  const getProductsForShop = (shopId: string, shopOwnerId?: string): Product[] => {
+    return allProducts.filter(p => p.shopId === shopId || (shopOwnerId && p.shopOwnerId === shopOwnerId));
+  };
 
   // Sync / Listen to Firestore for Shops
   useEffect(() => {
@@ -126,9 +191,29 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return merged;
           });
         }
+        setIsShopsLoaded(true);
       }, (err) => {
         console.warn('Firestore shops listener note:', err);
+        setIsShopsLoaded(true);
       });
+
+      // Listen to all public products across shops
+      const allProdCol = collection(db, 'products');
+      const unsubAllProds = onSnapshot(allProdCol, (snapshot) => {
+        if (!snapshot.empty) {
+          const dbProducts: Product[] = [];
+          snapshot.forEach((d) => dbProducts.push({ id: d.id, ...(d.data() as Omit<Product, 'id'>) }));
+          setAllProducts(prev => {
+            const merged = [...dbProducts];
+            INITIAL_PRODUCTS.forEach(initP => {
+              if (!merged.some(p => p.id === initP.id)) {
+                merged.push(initP);
+              }
+            });
+            return merged;
+          });
+        }
+      }, (err) => console.warn('Public products listener note:', err));
 
       // Listen to subscription requests
       const subReqCol = collection(db, 'subscription_requests');
@@ -152,10 +237,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return () => {
         unsubShops();
+        unsubAllProds();
         unsubSubReq();
       };
     } catch (e) {
       console.warn('Firestore init note:', e);
+      setIsShopsLoaded(true);
     }
   }, []);
 
@@ -666,7 +753,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: new Date().toISOString()
     };
 
-    setShops(prev => prev.map(s => s.id === activeShop.id ? updated : s));
+    setShops(prev => {
+      const newShops = prev.map(s => s.id === activeShop.id ? updated : s);
+      try {
+        localStorage.setItem(LOCAL_SHOPS_KEY, JSON.stringify(newShops.filter(s => !INITIAL_SHOPS.some(i => i.id === s.id))));
+      } catch (e) {
+        console.warn('Local shop save note:', e);
+      }
+      return newShops;
+    });
 
     try {
       await updateDoc(doc(db, 'shops', activeShop.id), updates);
@@ -675,11 +770,34 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const addCustomCategory = async (categoryName: string) => {
+    const trimmed = categoryName.trim();
+    if (!trimmed) return;
+    const existing = activeShop.customCategories || [];
+    if (existing.includes(trimmed)) return;
+    const updatedCategories = [...existing, trimmed];
+    await updateShopProfile({ customCategories: updatedCategories });
+  };
+
+  const removeCustomCategory = async (categoryName: string) => {
+    const trimmed = categoryName.trim();
+    const existing = activeShop.customCategories || [];
+    const updatedCategories = existing.filter(c => c.toLowerCase() !== trimmed.toLowerCase());
+    await updateShopProfile({ customCategories: updatedCategories });
+  };
+
   const createNewShop = async (shopData: Omit<Shop, 'id' | 'shopOwnerId' | 'createdAt'>): Promise<Shop> => {
     const ownerId = user ? user.uid : `owner_tenant_${Date.now()}`;
     const newId = `shop_${Date.now()}`;
+
+    // Guarantee a unique conflict-free slug based on shopName
+    const uniqueSlug = shopData.slug 
+      ? generateUniqueShopSlug(shopData.slug, shops)
+      : generateUniqueShopSlug(shopData.shopName, shops);
+
     const newShop: Shop = {
       ...shopData,
+      slug: uniqueSlug,
       id: newId,
       shopOwnerId: ownerId,
       createdAt: new Date().toISOString()
@@ -721,8 +839,26 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString()
     };
 
-    setShops(prev => [newShop, ...prev]);
-    setAllProducts(prev => [sampleProduct1, sampleProduct2, ...prev]);
+    setShops(prev => {
+      const updated = [newShop, ...prev];
+      try {
+        localStorage.setItem(LOCAL_SHOPS_KEY, JSON.stringify(updated.filter(s => !INITIAL_SHOPS.some(i => i.id === s.id))));
+      } catch (e) {
+        console.warn('Local shop save note:', e);
+      }
+      return updated;
+    });
+
+    setAllProducts(prev => {
+      const updated = [sampleProduct1, sampleProduct2, ...prev];
+      try {
+        localStorage.setItem(LOCAL_PRODUCTS_KEY, JSON.stringify(updated.filter(p => !INITIAL_PRODUCTS.some(i => i.id === p.id))));
+      } catch (e) {
+        console.warn('Local product save note:', e);
+      }
+      return updated;
+    });
+
     setActiveShopIdState(newId);
 
     try {
@@ -758,6 +894,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isProductLimitReached,
         canAccess,
         upgradePlan,
+        isShopsLoaded,
+        getShopBySlug,
+        getProductsForShop,
         subscriptionRequests,
         submitPlanUpgradeRequest,
         approvePlanRequest,
@@ -773,6 +912,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addKhataTransaction,
         updateShopProfile,
         updateShopSettings: updateShopProfile,
+        addCustomCategory,
+        removeCustomCategory,
         createNewShop
       }}
     >

@@ -6,34 +6,29 @@ import {
   Lock, 
   Mail, 
   User, 
-  Store, 
-  ShieldCheck, 
-  ShoppingBag, 
-  Sparkles, 
-  ArrowRight, 
   Building2,
-  CheckCircle2,
-  Phone
+  ArrowRight,
+  Store,
+  CheckCircle2
 } from 'lucide-react';
-import { DEMO_SHOP_OWNER_1, DEMO_SHOP_OWNER_2 } from '../../lib/demoData';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialMode?: 'merchant_signin' | 'customer_signin' | 'signup';
+  initialMode?: 'signin' | 'signup';
   onAuthenticated?: (targetMode: 'storefront' | 'admin' | 'super_admin') => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
-  initialMode = 'merchant_signin',
+  initialMode = 'signin',
   onAuthenticated
 }) => {
-  const { loginWithEmail, signupWithEmail, loginWithGoogle, switchDemoRole } = useAuth();
-  const { shops, setActiveShopId } = useShop();
+  const { loginWithEmail, signupWithEmail, loginWithGoogle } = useAuth();
+  const { setActiveShopId } = useShop();
 
-  const [mode, setMode] = useState<'merchant_signin' | 'customer_signin' | 'signup'>(initialMode);
+  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -48,23 +43,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      if (mode === 'merchant_signin') {
+      if (mode === 'signin') {
         const user = await loginWithEmail(email, password);
-        if (email.toLowerCase() === 'seikhsarif16@gmail.com' || user?.email?.toLowerCase() === 'seikhsarif16@gmail.com') {
+        const lowerEmail = (email || user?.email || '').toLowerCase();
+        if (lowerEmail === 'seikhsarif16@gmail.com') {
           if (onAuthenticated) onAuthenticated('super_admin');
         } else {
           if (onAuthenticated) onAuthenticated('admin');
         }
-      } else if (mode === 'customer_signin') {
-        await loginWithEmail(email, password);
-        if (onAuthenticated) onAuthenticated('storefront');
       } else {
         await signupWithEmail(email, password, name, 'shop_owner');
         if (onAuthenticated) onAuthenticated('admin');
       }
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Authentication failed. Please check credentials.');
+      setError(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
       setIsSubmitting(false);
     }
@@ -73,29 +66,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleGoogle = async () => {
     setError(null);
     try {
-      await loginWithGoogle();
-      if (onAuthenticated) onAuthenticated('admin');
+      const user = await loginWithGoogle();
+      const lowerEmail = user?.email?.toLowerCase() || '';
+      if (lowerEmail === 'seikhsarif16@gmail.com') {
+        if (onAuthenticated) onAuthenticated('super_admin');
+      } else {
+        if (onAuthenticated) onAuthenticated('admin');
+      }
       onClose();
     } catch (err: any) {
       setError(err.message || 'Google sign-in was cancelled or failed.');
     }
-  };
-
-  const handleQuickDemo = (role: 'shop_owner' | 'customer' | 'admin' | 'super_admin', ownerId?: string, shopId?: string) => {
-    switchDemoRole(role, ownerId);
-    if (shopId) {
-      setActiveShopId(shopId);
-    }
-    if (onAuthenticated) {
-      if (role === 'super_admin') {
-        onAuthenticated('super_admin');
-      } else if (role === 'shop_owner' || role === 'admin') {
-        onAuthenticated('admin');
-      } else {
-        onAuthenticated('storefront');
-      }
-    }
-    onClose();
   };
 
   return (
@@ -107,119 +88,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             id="close-auth-modal-btn"
             onClick={onClose}
-            className="absolute top-4 right-4 p-1 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
           >
             <X className="w-4 h-4" />
           </button>
           
           <div className="flex items-center gap-2 mb-2">
             <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-xs">
-              <Building2 className="w-3.5 h-3.5" />
+              <Store className="w-3.5 h-3.5" />
             </div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">KGN SHOP SaaS Auth</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Merchant Portal</span>
           </div>
 
           <h2 className="text-xl font-bold text-white tracking-tight">
-            {mode === 'merchant_signin' && 'Merchant Portal Sign In'}
-            {mode === 'customer_signin' && 'Customer Sign In'}
-            {mode === 'signup' && 'Register New Merchant Shop'}
+            {mode === 'signin' ? 'Merchant Sign In' : 'Register New Merchant Store'}
           </h2>
           <p className="text-xs text-slate-400 mt-1">
-            {mode === 'merchant_signin' && 'Access your isolated catalog, POS billing & Khata ledger'}
-            {mode === 'customer_signin' && 'Track online delivery orders and purchase receipts'}
-            {mode === 'signup' && 'Launch a dedicated digital storefront with instant QR checkout'}
+            {mode === 'signin' 
+              ? 'Sign in with your merchant credentials to manage products, POS & orders' 
+              : 'Launch your store catalog with online ordering and digital Khata ledger'}
           </p>
         </div>
 
         {/* Tab Selection */}
         <div className="flex items-center border-b border-slate-200 bg-slate-50 p-1 text-xs">
           <button
+            id="auth-tab-signin"
             type="button"
-            onClick={() => setMode('merchant_signin')}
+            onClick={() => {
+              setMode('signin');
+              setError(null);
+            }}
             className={`flex-1 py-2 text-center rounded-lg font-bold transition ${
-              mode === 'merchant_signin' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
+              mode === 'signin' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
-            Merchant Login
+            Sign In
           </button>
           <button
+            id="auth-tab-signup"
             type="button"
-            onClick={() => setMode('customer_signin')}
-            className={`flex-1 py-2 text-center rounded-lg font-bold transition ${
-              mode === 'customer_signin' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Customer Login
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('signup')}
+            onClick={() => {
+              setMode('signup');
+              setError(null);
+            }}
             className={`flex-1 py-2 text-center rounded-lg font-bold transition ${
               mode === 'signup' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
             }`}
           >
             Register Store
           </button>
-        </div>
-
-        {/* Sandbox Quick Logins */}
-        <div className="bg-slate-50 border-b border-slate-100 p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-blue-600" />
-              Instant Sandbox Switcher (Zero Config)
-            </span>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <button
-              id="demo-login-kgn-btn"
-              onClick={() => handleQuickDemo('shop_owner', DEMO_SHOP_OWNER_1, 'shop_kgn_01')}
-              className="p-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-left transition shadow-2xs group"
-            >
-              <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                <span>Shop A: KGN Market</span>
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5 font-mono">owner_kgn_main</div>
-            </button>
-
-            <button
-              id="demo-login-almadina-btn"
-              onClick={() => handleQuickDemo('shop_owner', DEMO_SHOP_OWNER_2, 'shop_al_madina_02')}
-              className="p-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-left transition shadow-2xs group"
-            >
-              <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                <span>Shop B: Al-Madina</span>
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5 font-mono">owner_al_madina</div>
-            </button>
-
-            <button
-              id="demo-login-customer-btn"
-              onClick={() => handleQuickDemo('customer')}
-              className="p-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-left transition shadow-2xs"
-            >
-              <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
-                <ShoppingBag className="w-3 h-3 text-amber-600" />
-                <span>Buyer / Shopper</span>
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">Storefront Cart & Orders</div>
-            </button>
-
-            <button
-              id="demo-login-admin-btn"
-              onClick={() => handleQuickDemo('super_admin')}
-              className="p-2.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-left transition shadow-2xs"
-            >
-              <div className="flex items-center gap-1.5 font-bold text-slate-900 text-xs">
-                <ShieldCheck className="w-3 h-3 text-purple-600" />
-                <span>Super Admin</span>
-              </div>
-              <div className="text-[10px] text-slate-400 mt-0.5">All Tenants & Approvals</div>
-            </button>
-          </div>
         </div>
 
         {/* Email & Password Form */}
@@ -230,18 +148,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit} className="space-y-3.5">
             {mode === 'signup' && (
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name / Merchant Name</label>
                 <div className="relative">
                   <User className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                   <input
+                    id="auth-name-input"
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Haji Sarif"
+                    placeholder="e.g. Shop Owner Name"
                     className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-slate-900 focus:outline-none transition"
                   />
                 </div>
@@ -253,11 +172,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="relative">
                 <Mail className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                 <input
+                  id="auth-email-input"
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="merchant@kgnshop.com"
+                  placeholder="merchant@example.com"
                   className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-slate-900 focus:outline-none transition"
                 />
               </div>
@@ -268,6 +188,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="relative">
                 <Lock className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                 <input
+                  id="auth-password-input"
                   type="password"
                   required
                   value={password}
@@ -285,7 +206,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2 mt-2"
             >
               {isSubmitting ? 'Processing...' : (
-                mode === 'signup' ? 'Create Merchant Account' : 'Sign In Securely'
+                mode === 'signup' ? 'Register Merchant Account' : 'Sign In to Merchant Console'
               )}
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
@@ -307,6 +228,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </svg>
               <span>Continue with Google</span>
             </button>
+          </div>
+
+          <div className="mt-4 text-center">
+            {mode === 'signin' ? (
+              <p className="text-xs text-slate-500">
+                New merchant?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signup');
+                    setError(null);
+                  }}
+                  className="text-blue-600 font-bold hover:underline"
+                >
+                  Register your store
+                </button>
+              </p>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Already registered?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signin');
+                    setError(null);
+                  }}
+                  className="text-blue-600 font-bold hover:underline"
+                >
+                  Sign in here
+                </button>
+              </p>
+            )}
           </div>
 
         </div>

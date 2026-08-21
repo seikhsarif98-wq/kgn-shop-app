@@ -35,9 +35,13 @@ export type AdminTab = 'overview' | 'pos' | 'catalog' | 'orders' | 'khata' | 'se
 
 interface AdminPortalViewProps {
   onOpenAuth: () => void;
+  onNavigateToStorefront?: (slug?: string) => void;
 }
 
-export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) => {
+export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ 
+  onOpenAuth,
+  onNavigateToStorefront 
+}) => {
   const { activeShop, shops, setActiveShopId, canAccess } = useShop();
   const { user, profile, isDemoMode, switchDemoRole, activeShopOwnerId, role } = useAuth();
 
@@ -45,12 +49,14 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
   const [isAddProductOpen, setIsAddProductOpen] = useState(false);
   const [isNewShopModalOpen, setIsNewShopModalOpen] = useState(false);
 
-  // Secure Password/PIN Lock Screen State
+  // Secure Password/PIN Lock Screen State - automatically unlocked for authenticated users
   const [isPinUnlocked, setIsPinUnlocked] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && window.sessionStorage) {
-      return sessionStorage.getItem(`kgn_admin_unlocked_${activeShop.id}`) === 'true';
+      const stored = sessionStorage.getItem(`kgn_admin_unlocked_${activeShop.id}`);
+      if (stored !== null) return stored === 'true';
     }
-    return false;
+    // Authenticated users directly enter without roadblock
+    return true;
   });
 
   // Re-verify lock when active shop switches
@@ -75,40 +81,32 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
     }
   };
 
-  // 1. Role verification: allow shop_owner or admin, or prompt demo switch
+  // 1. Role verification: allow shop_owner or admin, or prompt merchant sign-in
   const isAuthorized = role === 'shop_owner' || role === 'admin' || role === 'super_admin';
 
   if (!isAuthorized) {
     return (
       <div className="min-h-[80vh] flex items-center justify-center p-4">
         <div className="max-w-md w-full bg-white rounded-2xl p-8 border border-slate-200 shadow-sm text-center space-y-4">
-          <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center mx-auto border border-slate-200">
-            <Lock className="w-5 h-5" />
+          <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto border border-blue-100">
+            <Store className="w-6 h-6" />
           </div>
 
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Merchant Dashboard Protected</h2>
+            <h2 className="text-lg font-bold text-slate-900">Merchant Sign In Required</h2>
             <p className="text-xs text-slate-500 mt-1">
-              You are currently browsing as a <strong>Customer</strong>. To manage catalog inventory, POS billing terminal, and the Khata ledger, sign in as a shopkeeper.
+              Please sign in with your store owner credentials to access the POS terminal, catalog inventory, and Khata ledger.
             </p>
           </div>
 
           <div className="pt-2 flex flex-col gap-2">
             <button
-              onClick={() => {
-                switchDemoRole('shop_owner', activeShop.shopOwnerId);
-              }}
+              id="admin-portal-signin-btn"
+              onClick={onOpenAuth}
               className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-2"
             >
-              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-              <span>Switch to Demo Merchant ({activeShop.shopName})</span>
-            </button>
-
-            <button
-              onClick={onOpenAuth}
-              className="w-full py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
-            >
-              Sign In with Account
+              <Store className="w-3.5 h-3.5" />
+              <span>Merchant Sign In / Register</span>
             </button>
           </div>
         </div>
@@ -164,7 +162,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
               </span>
             </div>
             <p className="text-[11px] text-slate-500 font-mono">
-              Store PIN: <strong className="text-slate-700">{activeShop.adminPin || '1234'}</strong> • Tenant Partition Active
+              Store PIN: <strong className="text-slate-700">{activeShop.adminPin || '1234'}</strong> • <span className="text-emerald-700 font-bold">Store Active</span>
             </p>
           </div>
         </div>
@@ -174,10 +172,10 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
             id="admin-lock-terminal-btn"
             onClick={handleLockTerminal}
             className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-2xs"
-            title="Lock the admin screen immediately"
+            title="Lock the admin screen"
           >
             <Lock className="w-3.5 h-3.5 text-rose-600" />
-            <span>Lock Admin Terminal</span>
+            <span>Lock Terminal</span>
           </button>
         </div>
       </div>
@@ -241,7 +239,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
             </button>
           </div>
 
-          {/* Tenant Session Active Card & Quick Lock */}
+          {/* Store Active Status Card & Quick Lock */}
           <div className="pt-4 border-t border-slate-100 space-y-2">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-xs shrink-0">
@@ -249,15 +247,16 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
               </div>
               <div className="min-w-0">
                 <p className="text-xs font-bold text-slate-900 truncate">{activeShop.shopName}</p>
-                <p className="text-[10px] text-slate-400 font-mono">UID: {activeShop.shopOwnerId.substring(0, 10)}...</p>
+                <p className="text-[10px] text-slate-500 font-medium">Category: {activeShop.category}</p>
               </div>
             </div>
             
-            <div className="p-2 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-bold border border-blue-100 flex items-center justify-between">
+            <div className="p-2.5 bg-emerald-50 text-emerald-800 rounded-xl text-[11px] font-bold border border-emerald-100 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-                <span>Tenant Partition Isolated</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Store Active</span>
               </div>
+              <span className="text-[9px] font-semibold bg-emerald-200/60 px-1.5 py-0.5 rounded text-emerald-900">Online</span>
             </div>
 
             <button
@@ -280,6 +279,7 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onOpenAuth }) 
                 setActiveTab('catalog');
                 setIsAddProductOpen(true);
               }}
+              onViewStorefront={() => onNavigateToStorefront?.(activeShop.slug)}
             />
           )}
 

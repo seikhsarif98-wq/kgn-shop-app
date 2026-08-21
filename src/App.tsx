@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { AuthProvider } from './context/AuthContext';
+import React, { useState, useEffect, useRef } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { ShopProvider, useShop } from './context/ShopContext';
 import { Header } from './components/common/Header';
 import { StorefrontView } from './views/storefront/StorefrontView';
@@ -14,55 +14,147 @@ import { AdminPortalView } from './views/admin/AdminPortalView';
 import { SuperAdminPortal } from './views/superadmin/SuperAdminPortal';
 import { AuthModal } from './views/auth/AuthModal';
 import { NewShopModal } from './views/admin/NewShopModal';
+import { MyOrdersModal } from './views/storefront/MyOrdersModal';
+import { parseStoreSlugFromUrl } from './lib/slugs';
 
 export type AppMode = 'storefront' | 'directory' | 'admin' | 'super_admin';
 
 const AppContent: React.FC = () => {
+  const { role, isSuperAdmin, isShopAdmin, user } = useAuth();
+  const { shops, activeShop, setActiveShopId, getShopBySlug } = useShop();
+
+  const [currentStoreSlug, setCurrentStoreSlug] = useState<string | null>(() => parseStoreSlugFromUrl());
+
   const [currentMode, setCurrentMode] = useState<AppMode>(() => {
     if (typeof window !== 'undefined') {
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
-      if (path === '/super-admin' || path.startsWith('/super-admin') || hash === '#/super-admin' || hash === '#super-admin') {
+      if (
+        path === '/super-admin' || 
+        path.startsWith('/super-admin') || 
+        path === '/admin-login' || 
+        path.startsWith('/admin-login') ||
+        hash === '#/super-admin' || 
+        hash === '#super-admin' ||
+        hash === '#/admin-login' ||
+        hash === '#admin-login'
+      ) {
         return 'super_admin';
       }
-      if (path === '/admin' || path.startsWith('/admin') || hash === '#/admin') {
+      if (
+        path === '/admin' || 
+        path.startsWith('/admin') || 
+        path === '/dashboard' || 
+        path.startsWith('/dashboard') ||
+        path === '/merchant' || 
+        path.startsWith('/merchant') ||
+        hash === '#/admin' ||
+        hash === '#admin' ||
+        hash === '#/dashboard' ||
+        hash === '#dashboard' ||
+        hash === '#/merchant' ||
+        hash === '#merchant'
+      ) {
         return 'admin';
+      }
+      if (path === '/shops' || hash === '#/shops' || hash === '#shops') {
+        return 'directory';
       }
     }
     return 'storefront';
   });
 
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isNewShopOpen, setIsNewShopOpen] = useState(false);
-  const { setActiveShopId } = useShop();
 
-  // Sync browser path/hash when mode changes
-  const handleModeChange = (mode: AppMode) => {
+  // Sync browser path/hash when mode or store slug changes
+  const handleModeChange = (mode: AppMode, targetSlug?: string) => {
     setCurrentMode(mode);
-    if (typeof window !== 'undefined' && window.history?.pushState) {
-      if (mode === 'super_admin') {
-        window.history.pushState(null, '', '/super-admin');
-      } else if (mode === 'admin') {
-        window.history.pushState(null, '', '/admin');
-      } else if (mode === 'directory') {
-        window.history.pushState(null, '', '/shops');
-      } else {
-        window.history.pushState(null, '', '/');
+
+    if (mode === 'storefront') {
+      const resolvedSlug = (targetSlug || (targetSlug === '' ? null : (currentStoreSlug || activeShop.slug))).toLowerCase();
+      setCurrentStoreSlug(resolvedSlug);
+      
+      // Sync active shop in context if matched
+      if (resolvedSlug) {
+        const found = getShopBySlug(resolvedSlug);
+        if (found) {
+          setActiveShopId(found.id);
+        }
+      }
+
+      if (typeof window !== 'undefined' && window.history?.pushState) {
+        const newPath = resolvedSlug ? `/store/${resolvedSlug}` : '/';
+        window.history.pushState(null, '', newPath);
+      }
+    } else {
+      if (typeof window !== 'undefined' && window.history?.pushState) {
+        if (mode === 'super_admin') {
+          window.history.pushState(null, '', '/admin-login');
+        } else if (mode === 'admin') {
+          window.history.pushState(null, '', '/dashboard');
+        } else if (mode === 'directory') {
+          window.history.pushState(null, '', '/shops');
+        }
       }
     }
   };
 
-  // Listen for browser popstate
+  // Track previous role to trigger instant redirection upon fresh login
+  const prevUserRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const currentUserId = user?.uid || null;
+    const isFreshLogin = currentUserId && currentUserId !== prevUserRef.current;
+    prevUserRef.current = currentUserId;
+
+    if (isFreshLogin) {
+      if (isSuperAdmin) {
+        handleModeChange('super_admin');
+      } else if (isShopAdmin) {
+        // Automatically direct merchant to Merchant Dashboard
+        handleModeChange('admin');
+      }
+    }
+  }, [user, role, isSuperAdmin, isShopAdmin]);
+
+  // Listen for browser back / forward navigation (popstate / hashchange)
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase();
-      if (path === '/super-admin' || path.startsWith('/super-admin') || hash === '#/super-admin' || hash === '#super-admin') {
+      const parsedSlug = parseStoreSlugFromUrl();
+      setCurrentStoreSlug(parsedSlug);
+
+      if (
+        path === '/super-admin' || 
+        path.startsWith('/super-admin') || 
+        path === '/admin-login' || 
+        path.startsWith('/admin-login') ||
+        hash === '#/super-admin' || 
+        hash === '#super-admin' ||
+        hash === '#/admin-login' ||
+        hash === '#admin-login'
+      ) {
         setCurrentMode('super_admin');
-      } else if (path === '/admin' || path.startsWith('/admin')) {
+      } else if (
+        path === '/admin' || 
+        path.startsWith('/admin') || 
+        path === '/dashboard' || 
+        path.startsWith('/dashboard') ||
+        path === '/merchant' || 
+        path.startsWith('/merchant') ||
+        hash === '#/admin' ||
+        hash === '#admin' ||
+        hash === '#/dashboard' ||
+        hash === '#dashboard' ||
+        hash === '#/merchant' ||
+        hash === '#merchant'
+      ) {
         setCurrentMode('admin');
-      } else if (path === '/shops') {
+      } else if (path === '/shops' || hash === '#/shops' || hash === '#shops') {
         setCurrentMode('directory');
       } else {
         setCurrentMode('storefront');
@@ -70,12 +162,21 @@ const AppContent: React.FC = () => {
     };
 
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener('hashchange', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handlePopState);
+    };
   }, []);
 
   const handleSelectShopFromDirectory = (shopId: string, targetMode: 'storefront' | 'admin') => {
+    const targetShop = shops.find(s => s.id === shopId);
     setActiveShopId(shopId);
-    handleModeChange(targetMode);
+    if (targetMode === 'storefront' && targetShop) {
+      handleModeChange('storefront', targetShop.slug);
+    } else {
+      handleModeChange(targetMode);
+    }
   };
 
   return (
@@ -86,6 +187,7 @@ const AppContent: React.FC = () => {
         onModeChange={handleModeChange}
         onOpenCart={() => setIsCartOpen(true)}
         onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenOrders={() => setIsOrdersOpen(true)}
         onOpenNewShopModal={() => setIsNewShopOpen(true)}
       />
 
@@ -93,8 +195,12 @@ const AppContent: React.FC = () => {
       <main className="flex-1">
         {currentMode === 'storefront' && (
           <StorefrontView
+            storeSlug={currentStoreSlug}
             onOpenCart={() => setIsCartOpen(true)}
             onOpenAuth={() => setIsAuthOpen(true)}
+            onOpenOrders={() => setIsOrdersOpen(true)}
+            onOpenNewShopModal={() => setIsNewShopOpen(true)}
+            onNavigateToMode={handleModeChange}
           />
         )}
 
@@ -108,6 +214,7 @@ const AppContent: React.FC = () => {
         {currentMode === 'admin' && (
           <AdminPortalView
             onOpenAuth={() => setIsAuthOpen(true)}
+            onNavigateToStorefront={(slug) => handleModeChange('storefront', slug || activeShop.slug)}
           />
         )}
 
@@ -117,7 +224,7 @@ const AppContent: React.FC = () => {
               setActiveShopId(shopId);
               handleModeChange('admin');
             }}
-            onNavigateToStorefront={() => handleModeChange('storefront')}
+            onNavigateToStorefront={(slug) => handleModeChange('storefront', slug || activeShop.slug)}
           />
         )}
       </main>
@@ -126,6 +233,13 @@ const AppContent: React.FC = () => {
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
+      />
+
+      {/* Customer Orders Tracking Modal */}
+      <MyOrdersModal
+        isOpen={isOrdersOpen}
+        onClose={() => setIsOrdersOpen(false)}
+        onContinueShopping={() => setIsCartOpen(false)}
       />
 
       {/* Authentication & Role Switcher Modal */}
