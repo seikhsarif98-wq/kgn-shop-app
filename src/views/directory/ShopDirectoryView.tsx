@@ -30,18 +30,20 @@ export const ShopDirectoryView: React.FC<ShopDirectoryViewProps> = ({
   onSelectShop,
   onOpenNewShopModal
 }) => {
-  const { shops, activeShop, products } = useShop();
+  const { allShops, shops, activeShop, products } = useShop();
   const { profile, role, activeShopOwnerId, switchDemoRole } = useAuth();
+
+  const directoryShops = allShops && allShops.length > 0 ? allShops : shops;
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedCity, setSelectedCity] = useState('All');
   const [activeTab, setActiveTab] = useState<'directory' | 'platform_overview'>('directory');
 
-  const categories = ['All', ...Array.from(new Set(shops.map(s => s.category)))];
-  const cities = ['All', ...Array.from(new Set(shops.map(s => s.city || 'Mumbai')))];
+  const categories = ['All', ...Array.from(new Set(directoryShops.map(s => s.category)))];
+  const cities = ['All', ...Array.from(new Set(directoryShops.map(s => s.city || 'Mumbai')))];
 
-  const filteredShops = shops.filter(shop => {
+  const filteredShops = directoryShops.filter(shop => {
     const matchesSearch = shop.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           shop.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (shop.city && shop.city.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -51,9 +53,9 @@ export const ShopDirectoryView: React.FC<ShopDirectoryViewProps> = ({
   });
 
   // Platform metrics for Super Admin tab
-  const totalShops = shops.length;
-  const activeShops = shops.filter(s => s.isActive).length;
-  const proShops = shops.filter(s => s.tier === 'pro' || s.tier === 'enterprise').length;
+  const totalShops = directoryShops.length;
+  const activeShops = directoryShops.filter(s => s.isActive).length;
+  const proShops = directoryShops.filter(s => s.tier === 'pro' || s.tier === 'enterprise').length;
 
   return (
     <div id="shop-directory-root" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">

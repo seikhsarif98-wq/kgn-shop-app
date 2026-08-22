@@ -50,6 +50,7 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
 }) => {
   const { isSuperAdmin, role, profile, switchDemoRole } = useAuth();
   const { 
+    allShops,
     shops, 
     activeShop,
     subscriptionRequests, 
@@ -62,6 +63,8 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
     restoreDemoShops,
     setActiveShopId
   } = useShop();
+
+  const masterShops = allShops && allShops.length > 0 ? allShops : shops;
 
   const [activeTab, setActiveTab] = useState<'pending' | 'all_requests' | 'shops' | 'settings'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
@@ -89,7 +92,7 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
   };
 
   const handleDeleteShop = async (shopId: string, shopName: string) => {
-    if (shops.length <= 1) {
+    if (masterShops.length <= 1) {
       alert('Cannot delete the only remaining shop.');
       return;
     }
@@ -151,12 +154,12 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
 
   const tierCounts = useMemo(() => {
     return {
-      free: shops.filter(s => s.tier === 'free').length,
-      starter: shops.filter(s => s.tier === 'starter').length,
-      pro: shops.filter(s => s.tier === 'pro').length,
-      enterprise: shops.filter(s => s.tier === 'enterprise').length,
+      free: masterShops.filter(s => s.tier === 'free').length,
+      starter: masterShops.filter(s => s.tier === 'starter').length,
+      pro: masterShops.filter(s => s.tier === 'pro').length,
+      enterprise: masterShops.filter(s => s.tier === 'enterprise').length,
     };
-  }, [shops]);
+  }, [masterShops]);
 
   const handleCopyUtr = (utr: string) => {
     navigator.clipboard.writeText(utr);
@@ -188,7 +191,7 @@ export const SuperAdminPortal: React.FC<SuperAdminPortalProps> = ({
     }
   };
 
-  const filteredShops = shops.filter(shop => {
+  const filteredShops = masterShops.filter(shop => {
     const matchesSearch = shop.shopName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       shop.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       shop.phone.includes(searchQuery);

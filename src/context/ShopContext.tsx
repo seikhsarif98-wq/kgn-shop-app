@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { 
   Shop, 
   Product, 
@@ -40,6 +40,7 @@ import {
 import { generateUniqueShopSlug, slugifyShopName } from '../lib/slugs';
 
 interface ShopContextType {
+  allShops: Shop[];
   shops: Shop[];
   activeShop: Shop;
   setActiveShopId: (shopId: string) => void;
@@ -156,9 +157,9 @@ const getInitialProducts = (): Product[] => {
 };
 
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeShopOwnerId, user, isDemoMode } = useAuth();
+  const { activeShopOwnerId, user, isDemoMode, isSuperAdmin } = useAuth();
   
-  const [shops, setShops] = useState<Shop[]>(getInitialShops);
+  const [allShops, setAllShops] = useState<Shop[]>(getInitialShops);
   const [isShopsLoaded, setIsShopsLoaded] = useState(false);
   const [activeShopId, setActiveShopIdState] = useState<string>(() => {
     try {
@@ -181,11 +182,40 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [cart, setCart] = useState<CartItem[]>([]);
   const [subscriptionRequests, setSubscriptionRequests] = useState<SubscriptionRequest[]>(INITIAL_SUBSCRIPTION_REQUESTS);
 
-  // Find active shop
-  const activeShop = shops.find(s => s.id === activeShopId) || shops[0] || INITIAL_SHOPS[0];
+  // STRICT MULTI-TENANT ISOLATION:
+  // Logged-in shopkeepers ONLY see shops created under their own account
+  const userShops = useMemo(() => {
+    if (isSuperAdmin) {
+      return allShops;
+    }
+    if (user?.uid) {
+      const owned = allShops.filter(s => s.shopOwnerId === user.uid);
+      return owned;
+    }
+    if (isDemoMode) {
+      return allShops.filter(s => s.shopOwnerId === activeShopOwnerId);
+    }
+    return allShops;
+  }, [allShops, user?.uid, isSuperAdmin, isDemoMode, activeShopOwnerId]);
+
+  // Exposed merchant shops: userShops (or allShops if Super Admin or guest)
+  const shops = userShops.length > 0 ? userShops : (isSuperAdmin || !user ? allShops : []);
+
+  // Active shop resolution
+  const activeShop = useMemo(() => {
+    if (shops.length > 0) {
+      const found = shops.find(s => s.id === activeShopId);
+      if (found) return found;
+      return shops[0];
+    }
+    const foundInAll = allShops.find(s => s.id === activeShopId);
+    if (foundInAll) return foundInAll;
+    return allShops[0] || INITIAL_SHOPS[0];
+  }, [shops, activeShopId, allShops]);
+
   const currentTenantOwnerId = isDemoMode ? activeShop.shopOwnerId : (user?.uid || activeShop.shopOwnerId);
 
-  // Helper: Retrieve shop by URL slug (case-insensitive & multi-source verified across ALL shops)
+  // Helper: Retrieve shop by URL slug across ALL registered shops
   const getShopBySlug = (slug: string): Shop | undefined => {
     if (!slug) return undefined;
     const cleanSlug = slugifyShopName(slug);
@@ -199,15 +229,13 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return (
         (sSlug && sSlug === cleanSlug) ||
         (sName && sName === cleanSlug) ||
-        (sId && sId === targetRaw) ||
-        (sSlug && sSlug.replace(/-/g, '') === cleanSlug.replace(/-/g, '')) ||
-        (sName && sName.replace(/-/g, '') === cleanSlug.replace(/-/g, ''))
+        (sId && sId === targetRaw)
       );
     };
 
-    // 1. Check in current state by slug or slugified shopName
-    const foundInState = shops.find(isMatch);
-    if (foundInState) return foundInState;
+    // 1. Check in allShops (global registered stores)
+    const foundInAll = allShops.find(isMatch);
+    if (foundInAll) return foundInAll;
 
     // 2. Check in localStorage directly (immediate synchronous recovery)
     try {
@@ -246,7 +274,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           });
           // Merge initial shops + local storage custom shops with Firestore loaded shops
-          setShops(prev => {
+          setAllShops(prev => {
             const merged = [...loadedShops];
             
             // Merge custom shops from localStorage so freshly created shops aren't wiped
@@ -490,7 +518,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: new Date().toISOString()
     };
 
-    setShops(prev => prev.map(s => s.id === activeShop.id ? updatedShop : s));
+    setAllShops(prev => prev.map(s => s.id === activeShop.id ? updatedShop : s));
 
     try {
       await updateDoc(doc(db, 'shops', activeShop.id), {
@@ -533,7 +561,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pendingUtrNumber: utrNumber,
       updatedAt: new Date().toISOString()
     };
-    setShops(prev => prev.map(s => s.id === activeShop.id ? updatedShop : s));
+    setAllShops(prev => prev.map(s => s.id === activeShop.id ? updatedShop : s));
 
     try {
       await setDoc(doc(db, 'subscription_requests', reqId), newRequest);
@@ -565,7 +593,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSubscriptionRequests(prev => prev.map(r => r.id === requestId ? updatedRequest : r));
 
     // Update target shop's tier to unlocked tier and activate
-    setShops(prev => prev.map(s => {
+    setAllShops(prev => prev.map(s => {
       if (s.id === req.shopId) {
         return {
           ...s,
@@ -614,7 +642,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSubscriptionRequests(prev => prev.map(r => r.id === requestId ? updatedRequest : r));
 
     // Clear shop pending flags
-    setShops(prev => prev.map(s => {
+    setAllShops(prev => prev.map(s => {
       if (s.id === req.shopId) {
         return {
           ...s,
@@ -645,7 +673,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Super Admin: Toggle Shop Active Status
   const toggleShopStatus = async (shopId: string, isActive: boolean) => {
-    setShops(prev => prev.map(s => s.id === shopId ? { ...s, isActive, updatedAt: new Date().toISOString() } : s));
+    setAllShops(prev => prev.map(s => s.id === shopId ? { ...s, isActive, updatedAt: new Date().toISOString() } : s));
     try {
       await updateDoc(doc(db, 'shops', shopId), {
         isActive,
@@ -658,7 +686,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Super Admin: Override Shop Tier
   const superAdminSetTier = async (shopId: string, newTier: SubscriptionTier) => {
-    setShops(prev => prev.map(s => s.id === shopId ? { ...s, tier: newTier, updatedAt: new Date().toISOString() } : s));
+    setAllShops(prev => prev.map(s => s.id === shopId ? { ...s, tier: newTier, updatedAt: new Date().toISOString() } : s));
     try {
       await updateDoc(doc(db, 'shops', shopId), {
         tier: newTier,
@@ -855,9 +883,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateShopProfile = async (updates: Partial<Shop>) => {
-    // If shopName is changed, derive URL slug from the new shopName and ensure uniqueness
+    // If shopName is changed, derive URL slug from the new shopName and ensure uniqueness across all shops
     const newSlug = updates.shopName 
-      ? generateUniqueShopSlug(updates.shopName, shops, activeShop.id) 
+      ? generateUniqueShopSlug(updates.shopName, allShops, activeShop.id) 
       : (updates.slug ? slugifyShopName(updates.slug) : (activeShop.slug || slugifyShopName(activeShop.shopName)));
 
     const updated: Shop = {
@@ -867,7 +895,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: new Date().toISOString()
     };
 
-    setShops(prev => {
+    setAllShops(prev => {
       const newShops = prev.map(s => s.id === activeShop.id ? updated : s);
       try {
         localStorage.setItem(LOCAL_SHOPS_KEY, JSON.stringify(newShops));
@@ -901,18 +929,21 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const createNewShop = async (shopData: Omit<Shop, 'id' | 'shopOwnerId' | 'createdAt'>): Promise<Shop> => {
-    const ownerId = user ? user.uid : `owner_tenant_${Date.now()}`;
+    const ownerId = user ? user.uid : (isDemoMode ? activeShopOwnerId : `owner_tenant_${Date.now()}`);
     const newId = `shop_${Date.now()}`;
 
     // Guarantee a unique conflict-free slug strictly derived from shopName (e.g., 'Fancy dukan' -> 'fancy-dukan')
     const baseSlug = slugifyShopName(shopData.shopName || shopData.slug || 'store');
-    const uniqueSlug = generateUniqueShopSlug(baseSlug, shops);
+    const uniqueSlug = generateUniqueShopSlug(baseSlug, allShops);
 
+    // Initial plan for any newly registered shop is strictly Free Forever (₹0/month)
     const newShop: Shop = {
       ...shopData,
       slug: uniqueSlug,
       id: newId,
       shopOwnerId: ownerId,
+      tier: 'free', // Strictly defaults to Free Forever (paid tiers require verification via Super Admin)
+      isActive: true,
       createdAt: new Date().toISOString()
     };
 
@@ -952,7 +983,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString()
     };
 
-    setShops(prev => {
+    setAllShops(prev => {
       const updated = [newShop, ...prev];
       try {
         localStorage.setItem(LOCAL_SHOPS_KEY, JSON.stringify(updated));
@@ -987,12 +1018,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteShop = async (shopId: string): Promise<void> => {
-    if (shops.length <= 1) {
+    if (allShops.length <= 1) {
       throw new Error('Cannot delete the only remaining shop.');
     }
 
-    const remainingShops = shops.filter(s => s.id !== shopId);
-    setShops(remainingShops);
+    const remainingShops = allShops.filter(s => s.id !== shopId);
+    setAllShops(remainingShops);
 
     // If active shop was deleted, switch to the first remaining shop
     if (activeShopId === shopId) {
@@ -1023,10 +1054,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resetDemoShops = async (keepShopId?: string): Promise<void> => {
     const targetShopId = keepShopId || activeShopId;
-    const mainShop = shops.find(s => s.id === targetShopId) || shops[0] || INITIAL_SHOPS[0];
+    const mainShop = allShops.find(s => s.id === targetShopId) || allShops[0] || INITIAL_SHOPS[0];
 
     const newShops = [mainShop];
-    setShops(newShops);
+    setAllShops(newShops);
     setActiveShopId(mainShop.id);
 
     // Prune products to only keep products belonging to mainShop
@@ -1045,7 +1076,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const restoreDemoShops = async (): Promise<void> => {
-    setShops(INITIAL_SHOPS);
+    setAllShops(INITIAL_SHOPS);
     setAllProducts(INITIAL_PRODUCTS);
     setAllOrders(INITIAL_ORDERS);
     setAllKhataCustomers(INITIAL_KHATA_CUSTOMERS);
@@ -1063,6 +1094,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <ShopContext.Provider
       value={{
+        allShops,
         shops,
         activeShop,
         setActiveShopId,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useShop } from '../../context/ShopContext';
 import { 
   Store, 
@@ -54,6 +54,23 @@ export const ShopSettings: React.FC<ShopSettingsProps> = ({ onViewStorefront }) 
   const [isSaved, setIsSaved] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+
+  // Sync state when activeShop changes
+  useEffect(() => {
+    setShopName(activeShop.shopName);
+    setTagline(activeShop.tagline || '');
+    setCategory(activeShop.category);
+    setAdminPin(activeShop.adminPin || '1234');
+    setPhone(activeShop.phone);
+    setWhatsappNumber(activeShop.whatsappNumber || '');
+    setAddress(activeShop.address || '');
+    setCity(activeShop.city || '');
+    setPincode(activeShop.pincode || '');
+    setUpiId(activeShop.upiId || '');
+    setPaymentQrUrl(activeShop.paymentQrUrl || '');
+    setLogoUrl(activeShop.logoUrl || '');
+    setBannerUrl(activeShop.bannerUrl || '');
+  }, [activeShop.id, activeShop]);
 
   const activeStoreSlug = slugifyShopName(activeShop.slug || activeShop.shopName);
   const shareableStoreUrl = getShareableStoreUrl(activeStoreSlug);

@@ -47,7 +47,7 @@ export const NewShopModal: React.FC<NewShopModalProps> = ({ isOpen, onClose, onN
   const [pincode, setPincode] = useState('400001');
   const [adminPin, setAdminPin] = useState('1234');
   const [upiId, setUpiId] = useState('');
-  const [tier, setTier] = useState<SubscriptionTier>('starter');
+  const [tier, setTier] = useState<SubscriptionTier>('free');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdShop, setCreatedShop] = useState<Shop | null>(null);
   const [copied, setCopied] = useState(false);
@@ -103,7 +103,7 @@ export const NewShopModal: React.FC<NewShopModalProps> = ({ isOpen, onClose, onN
         upiId: upiId || `${finalSlug.replace(/[^a-z0-9]/g, '')}@okhdfcbank`,
         logoUrl: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=200&auto=format&fit=crop&q=80',
         bannerUrl: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58?w=1000&auto=format&fit=crop&q=80',
-        tier,
+        tier: 'free', // Strictly default to Free Forever tier
         currency: '₹',
         isActive: true
       });
@@ -436,36 +436,31 @@ export const NewShopModal: React.FC<NewShopModalProps> = ({ isOpen, onClose, onN
 
                 {/* Plan Selection */}
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-2">Select Initial SaaS Plan</label>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <div 
-                      onClick={() => setTier('starter')}
-                      className={`p-3 rounded-xl border cursor-pointer transition flex flex-col justify-between ${
-                        tier === 'starter' ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900' : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <div className="flex justify-between items-start">
-                        <span className="font-bold text-slate-900">Starter Kirana</span>
-                        {tier === 'starter' && <Check className="w-3.5 h-3.5 text-blue-600" />}
-                      </div>
-                      <div className="mt-2 text-xs font-black text-slate-900">₹499<span className="text-[10px] font-normal text-slate-500">/mo</span></div>
-                      <p className="text-[10px] text-slate-500 mt-1">Up to 500 SKUs, POS & Khata</p>
-                    </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block font-semibold text-slate-700">Initial Subscription Plan</label>
+                    <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                      Free Plan Activated by Default
+                    </span>
+                  </div>
 
-                    <div 
-                      onClick={() => setTier('pro')}
-                      className={`p-3 rounded-xl border cursor-pointer transition flex flex-col justify-between relative ${
-                        tier === 'pro' ? 'border-blue-600 bg-blue-50/50 ring-1 ring-blue-600' : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <span className="absolute -top-2 right-2 bg-blue-600 text-white text-[8px] font-bold px-1.5 py-0.2 rounded uppercase">Popular</span>
-                      <div className="flex justify-between items-start">
-                        <span className="font-bold text-slate-900">Multi-Shop Pro</span>
-                        {tier === 'pro' && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                  <div className="p-3.5 rounded-xl border-2 border-emerald-500 bg-emerald-50/40 space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-slate-900 text-sm">Free Forever Starter</span>
+                          <span className="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.2 rounded uppercase">Active</span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Online storefront, up to 15 product SKUs & WhatsApp order routing.</p>
                       </div>
-                      <div className="mt-2 text-xs font-black text-slate-900">₹999<span className="text-[10px] font-normal text-slate-500">/mo</span></div>
-                      <p className="text-[10px] text-slate-500 mt-1">Unlimited SKUs & Auto WhatsApp</p>
+                      <div className="text-right">
+                        <span className="text-base font-black text-slate-900">₹0</span>
+                        <span className="text-[10px] text-slate-500 block">/forever</span>
+                      </div>
                     </div>
+                    <p className="text-[10px] text-slate-500 border-t border-emerald-200/60 pt-1.5 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
+                      <span>Higher plans (Starter ₹199, Pro ₹499) can be requested anytime with UPI payment proof & approved by Super Admin.</span>
+                    </p>
                   </div>
                 </div>
 
